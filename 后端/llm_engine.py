@@ -1,5 +1,5 @@
 import os
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 import json
 import random
 from datetime import datetime
@@ -39,6 +39,12 @@ class LLMEngine:
         return OpenAI(api_key=api_key, base_url="https://api.deepseek.com/v1")
 
     @staticmethod
+    def _get_async_client(api_key: str):
+        if not api_key:
+            raise ValueError("API Key is missing")
+        return AsyncOpenAI(api_key=api_key, base_url="https://api.deepseek.com/v1")
+
+    @staticmethod
     def _get_hexagram():
         hexagrams = [
             "乾为天 (元亨利贞)", "坤为地 (厚德载物)", "水雷屯 (万事开头难)", "山水蒙 (启蒙)",
@@ -72,7 +78,14 @@ class LLMEngine:
     "passive_rules": {{ "income_base": 100, "expense_base": 50 }},
     "initial_attributes": {{ "cash": 1000, "morale": 50, "reputation": 50, "innovation": 10 }},
     "first_options": [
-        {{ "id": "1", "label": "...", "desc": "...", "predicted_effect": "..." }}
+        {{ 
+            "id": "1", 
+            "label": "...", 
+            "desc": "...", 
+            "cost": 100,
+            "cost_desc": "Initial Setup: 100",
+            "predicted_effect": "..." 
+        }}
     ]
 }}
 """
@@ -124,9 +137,20 @@ class LLMEngine:
 {{
     "logic_chain": "1. ... 2. ...",
     "narrative": "剧情内容...",
+    "event_summary": "一句话概括本回合发生的关键事件（用于侧边栏日志）...需包含本轮游戏的几个角色",
     "attribute_changes": {{ "cash": -100, "morale": -5, "reputation": 0, "innovation": 10 }},
     "next_options": [
-         {{ "id": "1", "label": "...", "desc": "...", "predicted_effect": "..." }}
+         {{ 
+           "id": "1", 
+           "label": "选项简述", 
+           "desc": "详细描述...", 
+           "cost": 500, 
+           "cost_desc": "研发投入: 500",
+           "predicted_effect": "..." 
+         }},
+         {{ "id": "2", "cost": 0, "cost_desc": "无成本", ... }},
+         {{ "id": "3", ... }},
+         {{ "id": "4", ... }}
     ]
 }}
 """
@@ -136,6 +160,12 @@ class LLMEngine:
             response_data["system_note"] = response_data["logic_chain"]
             
         return response_data
+
+    @classmethod
+    async def process_turn_async(cls, current_state: dict, player_action_text: str, api_key: str, player_position: str = "ceo"):
+        """Async version of process_turn"""
+        return await cls._run_in_executor(cls.process_turn, current_state, player_action_text, api_key, player_position)
+
     
     @classmethod
     def generate_ai_decision(cls, current_state: dict, player_position: str, api_key: str):
@@ -184,6 +214,18 @@ class LLMEngine:
         
         response = cls._call_llm(prompt, api_key)
         return response.get("narrative", "").strip()
+
+    @classmethod
+    async def generate_ai_decision_async(cls, current_state: dict, player_position: str, api_key: str):
+        """Async version of generate_ai_decision"""
+        return await cls._run_in_executor(cls.generate_ai_decision, current_state, player_position, api_key)
+
+    @staticmethod
+    async def _run_in_executor(func, *args):
+        import asyncio
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, func, *args)
+
 
     @classmethod
     def _call_llm(cls, prompt, api_key):

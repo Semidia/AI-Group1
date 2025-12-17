@@ -41,15 +41,11 @@ export async function initGame(settings = "") {
  */
 export async function sendAction(action, systemPrompts = []) {
     try {
-        const payload = {
-            action,
-            systemPrompts: systemPrompts.length > 0 ? systemPrompts : undefined
-        };
-
         const response = await fetch(`${API_BASE}/api/action`, {
             method: "POST",
             headers: getHeaders(),
-            body: JSON.stringify(payload)
+            // Backend expects PlayerAction fields directly in body
+            body: JSON.stringify(action)
         });
         if (!response.ok) throw new Error("Failed to send action");
         return await response.json();
