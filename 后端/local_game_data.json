@@ -697,6 +697,83 @@
         "reputation_rule": "Reputation_Next = Reputation - 2 (Competition_Erosion) + Innovation/5 (Tech_Leadership) + Action_Effect_Reputation",
         "innovation_rule": "Innovation_Next = Innovation - 1 (Knowledge_Decay) + Morale/20 (Team_Creativity) + Action_Effect_Innovation"
       }
+    },
+    {
+      "game_id": "default_room",
+      "round_id": 1,
+      "company_name": "Nexus Corp",
+      "turn": 1,
+      "attributes": {
+        "cash": 1000,
+        "morale": 50,
+        "reputation": 50,
+        "innovation": 10
+      },
+      "players": [
+        {
+          "id": "player_human",
+          "name": "CEO (玩家)",
+          "type": "human",
+          "position": "ceo"
+        },
+        {
+          "id": "player_ai_tech",
+          "name": "CTO (AI)",
+          "type": "ai",
+          "position": "cto"
+        },
+        {
+          "id": "player_ai_market",
+          "name": "CMO (AI)",
+          "type": "ai",
+          "position": "cmo"
+        }
+      ],
+      "history": [
+        {
+          "id": 1765975188,
+          "type": "system",
+          "text": "在2045年的新深圳，你创立了'门墙科技'——一家专注于'认知接口'的初创公司。这个世界中，'墙'既是物理屏障，也是数字鸿沟，而你的技术承诺将任何障碍转化为连接的门户。你的核心产品'灵犀芯片'能解读脑波，让用户用意念操控智能设备，但技术尚不成熟，市场充满疑虑。多方势力暗中角力：'深网集团'想收购你以垄断接口标准；'开源心智联盟'视你为技术救星，希望开放协议；监管机构'数字伦理委员会'紧盯隐私风险；竞争对手'神经元科技'正研发类似产品，试图抢先上市。更棘手的是，公司内部暗流涌动：CTO主张激进迭代，CFO要求稳健盈利，员工们对加班文化怨声载道。首轮融资后，你手握1000万现金，但烧钱速度惊人。此刻，一封来自'深网集团'的收购邀约摆在桌上，条件优厚却附带苛刻对赌条款；同时，联盟发来技术共享倡议，承诺生态支持但要求公开核心代码。墙外是资本诱惑与合纵连横，墙内是理想主义与生存压力。每一道墙都可能是通向新世界的门，或是困住野心的牢笼。你的第一个决策，将如蝴蝶振翅，掀起无法预料的因果链。"
+        }
+      ],
+      "current_options": [
+        {
+          "id": "1",
+          "label": "接受深网收购邀约",
+          "desc": "签署对赌协议，获得300现金注入，但需承诺6个月内产品上市，否则股份稀释。",
+          "predicted_effect": "Cash +300, Reputation +10 (资本认可), Morale -15 (团队失落), Innovation -5 (急功近利)"
+        },
+        {
+          "id": "2",
+          "label": "加入开源心智联盟",
+          "desc": "公开部分代码，换取技术支援与生态入口，但可能削弱专利壁垒。",
+          "predicted_effect": "Innovation +20, Reputation +15 (理想主义光环), Cash -100 (适配成本), Morale +10 (使命驱动)"
+        },
+        {
+          "id": "3",
+          "label": "拒绝外部，专注研发",
+          "desc": "砍掉营销预算，全员投入技术攻坚，争取突破性迭代。",
+          "predicted_effect": "Innovation +30, Cash -200 (纯投入), Morale -5 (高压环境), Reputation -5 (市场沉默)"
+        },
+        {
+          "id": "4",
+          "label": "发起价格战",
+          "desc": "将原型机降价50%预售，抢占早期用户，但可能引发监管审查。",
+          "predicted_effect": "Cash +150 (预收款), Reputation +5 (市场热度), Innovation -10 (资源分流), Morale +5 (销售激励)"
+        }
+      ],
+      "passive_rules": {
+        "income_base": 100,
+        "expense_base": 50,
+        "morale_decay": 2,
+        "innovation_decay": 1
+      },
+      "formulas": {
+        "cash_rule": "Cash_Next = Cash - (50 + Innovation * 2) (Base Cost & R&D) + (Reputation * 3 + Innovation * 5) (Revenue) + Action_Effect",
+        "morale_rule": "Morale_Next = Morale - (Cash < 500 ? 5 : 2) (Financial Stress or Fatigue) + (Innovation / 10) (Tech Pride) + Action_Effect",
+        "reputation_rule": "Reputation_Next = Reputation - (Morale < 30 ? 3 : 0) (Rumor Penalty) + (Innovation / 5) (Tech Buzz) + Action_Effect",
+        "innovation_rule": "Innovation_Next = Innovation - (Cash < 300 ? 2 : 0) (Funding Shortfall) + (Morale / 10) (Team Creativity) + Action_Effect"
+      }
     }
   ]
 }
