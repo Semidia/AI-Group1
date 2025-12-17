@@ -1,0 +1,38 @@
+{
+  "default_room": [
+    {
+      "game_id": "default_room",
+      "round_id": 1,
+      "company_name": "Nexus Corp",
+      "turn": 1,
+      "attributes": {},
+      "history": [
+        {
+          "id": 1765964329,
+          "type": "system",
+          "text": "Error: Connection error."
+        }
+      ],
+      "current_options": [],
+      "passive_rules": {},
+      "formulas": ""
+    },
+    {
+      "game_id": "default_room",
+      "round_id": 1,
+      "company_name": "Nexus Corp",
+      "turn": 1,
+      "attributes": {},
+      "history": [
+        {
+          "id": 1765966751,
+          "type": "system",
+          "text": "Error: Connection error."
+        }
+      ],
+      "current_options": [],
+      "passive_rules": {},
+      "formulas": ""
+    }
+  ]
+}
