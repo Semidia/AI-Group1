@@ -175,10 +175,16 @@ def init_game(payload: InitSettings, authorization: Annotated[str | None, Header
 
 import asyncio
 
+<<<<<<< HEAD
 from fastapi.responses import StreamingResponse
 
 @app.post("/api/action")
 async def process_action(action: PlayerAction, authorization: Annotated[str | None, Header()] = None):
+=======
+@app.post("/api/action")
+async def process_action(action: PlayerAction, authorization: Annotated[str | None, Header()] = None):
+    # Get Key from Header
+>>>>>>> origin/main
     api_key = get_api_key(authorization)
     game_id = action.gameId
     
@@ -194,12 +200,20 @@ async def process_action(action: PlayerAction, authorization: Annotated[str | No
         "formulas": last_state_doc.get("formulas", "")
     }
     
+<<<<<<< HEAD
     # Construct User Input
+=======
+    initial_attributes = current_state["attributes"].copy()
+
+    # 2. Call LLM for human player (CEO)
+    # Combine user inputs (Option + Custom Text)
+>>>>>>> origin/main
     input_parts = []
     if action.label and action.label != "Custom Directive":
         input_parts.append(f"执行选项: [{action.label}]")
     if action.customText:
         input_parts.append(f"额外指令: {action.customText}")
+<<<<<<< HEAD
     user_input = " + ".join(input_parts) if input_parts else "无操作"
 
     async def event_generator():
@@ -293,6 +307,163 @@ async def process_action(action: PlayerAction, authorization: Annotated[str | No
         yield f"data: {json.dumps({'type': 'done', 'state': new_doc, 'event_summary': event_summary})}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+=======
+    
+    user_input = " + ".join(input_parts) if input_parts else "无操作"
+    
+    print(f"[{STORAGE_MODE}] Action: {user_input} (Position: {action.playerPosition})")
+    
+    # CEO Turn (Serial)
+    llm_result = await LLMEngine.process_turn_async(current_state, user_input, api_key, action.playerPosition)
+    
+    # 3. Update Logic for human player's decision
+    new_attributes = current_state["attributes"].copy()
+    changes = llm_result.get("attribute_changes", {})
+    
+    for key, val in changes.items():
+        if key in new_attributes:
+            new_attributes[key] += val
+            new_attributes[key] = max(0, new_attributes[key])
+    
+    new_history = current_state["history"].copy()
+    new_history.append({
+        "id": int(time.time()),
+        "type": "player",
+        "playerId": action.playerId,
+        "playerPosition": action.playerPosition,
+        "text": f"决策: {user_input}"
+    })
+    
+    sys_text = llm_result.get("narrative", "")
+    # logic chain is NO LONGER appended to text
+    
+    system_entry = {
+        "id": int(time.time()) + 1,
+        "type": "system",
+        "text": sys_text
+    }
+    if "logic_chain" in llm_result:
+        system_entry["logicChain"] = llm_result['logic_chain']
+        
+    new_history.append(system_entry)
+    
+    final_options = llm_result.get("next_options", [])
+
+    # 4. If the action was from CEO (human), automatically trigger AI players' decisions in PARALLEL
+    if action.playerPosition == "ceo":
+        print(f"[{STORAGE_MODE}] Triggering AI players in parallel...")
+        
+        # Prepare state for AI (they see the state AFTER CEO's move)
+        ai_input_state = {
+            "attributes": new_attributes,
+            "history": new_history,
+            "turn": current_state["turn"] + 1,
+            "formulas": current_state["formulas"]
+        }
+
+        # Define async task for an AI player
+        async def run_ai_turn(role, position):
+             print(f"[{STORAGE_MODE}] Generating {role} decision...")
+             decision = await LLMEngine.generate_ai_decision_async(ai_input_state, position, api_key)
+             
+             print(f"[{STORAGE_MODE}] Processing {role} decision...")
+             result = await LLMEngine.process_turn_async(ai_input_state, decision, api_key, position)
+             
+             return {
+                 "role": role,
+                 "position": position,
+                 "decision": decision,
+                 "result": result
+             }
+
+        # Run CTO and CMO in parallel
+        results = await asyncio.gather(
+            run_ai_turn("CTO", "cto"),
+            run_ai_turn("CMO", "cmo")
+        )
+        
+        # Apply results sequentially to ensure deterministic history order
+        # (Though we could timestamp them, sequential append is safer for readability)
+        timestamp_offset = 2
+        
+        for res in results:
+            role = res["role"]
+            position = res["position"]
+            decision = res["decision"]
+            ai_result = res["result"]
+            
+            # Update Attributes
+            ai_changes = ai_result.get("attribute_changes", {})
+            for key, val in ai_changes.items():
+                if key in new_attributes:
+                    new_attributes[key] += val
+                    new_attributes[key] = max(0, new_attributes[key])
+            
+            # Append History
+            new_history.append({
+                "id": int(time.time()) + timestamp_offset,
+                "type": "player",
+                "playerId": f"player_ai_{position}",
+                "playerPosition": position,
+                "text": f"{role}决策: {decision}"
+            })
+            timestamp_offset += 1
+            
+            ai_sys_text = ai_result.get("narrative", "")
+            ai_sys_entry = {
+                "id": int(time.time()) + timestamp_offset,
+                "type": "system",
+                "text": ai_sys_text
+            }
+            if "logic_chain" in ai_result:
+                ai_sys_entry["logicChain"] = ai_result['logic_chain']
+            
+            new_history.append(ai_sys_entry)
+            timestamp_offset += 1
+            
+            # Update options (CMO's options usually overwrite, or valid valid logic)
+            # using the last one is fine for now
+            final_options = ai_result.get("next_options", [])
+
+    # Calculate Deltas
+    deltas = {}
+    for key in new_attributes:
+        diff = new_attributes[key] - initial_attributes.get(key, 0)
+        if diff != 0:
+            deltas[key] = diff
+
+    # Extract Event Summary (Prefer CEO's turn summary)
+    event_summary = llm_result.get("event_summary", None)
+    print(f"[{STORAGE_MODE}] Retrieved event_summary from LLM: {event_summary}")
+
+    new_doc = {
+        "game_id": game_id,
+        "round_id": last_state_doc.get("round_id", 0) + 1,
+        "company_name": last_state_doc.get("company_name"),
+        "turn": current_state["turn"] + 1,
+        "attributes": new_attributes,
+        "players": last_state_doc.get("players", []),
+        "history": new_history,
+        "current_options": final_options,
+        "passive_rules": last_state_doc.get("passive_rules", {}),
+        "formulas": last_state_doc.get("formulas", "")
+    }
+    
+    db.push_new_state(new_doc)
+    
+    return {
+        "state": {
+            "companyName": new_doc["company_name"],
+            "turn": new_doc["turn"],
+            "attributes": new_doc["attributes"],
+            "players": new_doc["players"],
+            "history": new_doc["history"]
+        },
+        "options": new_doc["current_options"],
+        "deltas": deltas,  # Return deltas to frontend
+        "event_summary": event_summary # Return event summary
+    }
+>>>>>>> origin/main
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

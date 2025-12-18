@@ -195,6 +195,38 @@ class LLMEngine:
     @classmethod
     async def analyze_logic_async(cls, current_state: dict, player_action_text: str, api_key: str, player_position: str = "ceo"):
         return await cls._run_in_executor(cls.analyze_logic, current_state, player_action_text, api_key, player_position)
+=======
+    "logic_chain": "1. ... 2. ...",
+    "narrative": "剧情内容...",
+    "event_summary": "一句话概括本回合发生的关键事件（用于侧边栏日志）...需包含本轮游戏的几个角色",
+    "attribute_changes": {{ "cash": -100, "morale": -5, "reputation": 0, "innovation": 10 }},
+    "next_options": [
+         {{ 
+           "id": "1", 
+           "label": "选项简述", 
+           "desc": "详细描述...", 
+           "cost": 500, 
+           "cost_desc": "研发投入: 500",
+           "predicted_effect": "..." 
+         }},
+         {{ "id": "2", "cost": 0, "cost_desc": "无成本", ... }},
+         {{ "id": "3", ... }},
+         {{ "id": "4", ... }}
+    ]
+}}
+"""
+        response_data = cls._call_llm(prompt, api_key)
+        
+        if "system_note" not in response_data and "logic_chain" in response_data:
+            response_data["system_note"] = response_data["logic_chain"]
+            
+        return response_data
+
+    @classmethod
+    async def process_turn_async(cls, current_state: dict, player_action_text: str, api_key: str, player_position: str = "ceo"):
+        """Async version of process_turn"""
+        return await cls._run_in_executor(cls.process_turn, current_state, player_action_text, api_key, player_position)
+>>>>>>> origin/main
 
     
     @classmethod
@@ -258,7 +290,11 @@ class LLMEngine:
 
 
     @classmethod
+<<<<<<< HEAD
     def _call_llm(cls, prompt, api_key, max_tokens=None):
+=======
+    def _call_llm(cls, prompt, api_key):
+>>>>>>> origin/main
         try:
             client = cls._get_client(api_key)
             print(f"DEBUG: Calling LLM at {client.base_url} with model deepseek-chat...")

@@ -4036,6 +4036,7 @@
         "reputation_rule": "Reputation_Next = Reputation - 3 (Ethical_Decay) + Innovation/5 (Breakthrough_Prestige) + Action_Effect_Reputation",
         "innovation_rule": "Innovation_Next = Innovation - 2 (Knowledge_Obsolescence) + Morale/10 (Team_Creativity) + Action_Effect_Innovation"
       }
+<<<<<<< HEAD
     },
     {
       "game_id": "default_room",
@@ -4238,6 +4239,8 @@
         "reputation_rule": "Reputation_Next = Reputation - 3 (Ethical_Decay) + Innovation/5 (Breakthrough_Prestige) + Action_Effect_Reputation",
         "innovation_rule": "Innovation_Next = Innovation - 2 (Knowledge_Obsolescence) + Morale/10 (Team_Creativity) + Action_Effect_Innovation"
       }
+=======
+>>>>>>> origin/main
     }
   ]
 }
