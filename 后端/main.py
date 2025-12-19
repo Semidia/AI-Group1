@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Annotated
 import uvicorn
 import time
+import random
 import os
 import sys
 import json
@@ -90,6 +91,25 @@ def toggle_mode(mode: str):
         db = LocalBridge()
         return {"message": "Switched to LOCAL mode."}
 
+def _generate_chinese_company_name():
+    prefixes = ["星河", "量子", "蓝海", "晨曦", "未来", "鸿蒙", "极光", "深空", "云岚", "燎原"]
+    middles = ["科", "数", "智", "新", "云", "链", "芯", "网", "创", "数智"]
+    suffixes = ["科技", "集团", "资本", "网络", "创新", "智能", "控股", "系统", "实验室", "科技有限公司"]
+
+    prefix = random.choice(prefixes)
+    middle = random.choice(middles) if random.random() < 0.6 else ""
+    suffix = random.choice(suffixes)
+    return f"{prefix}{middle}{suffix}"
+
+
+def _generate_company_set():
+    names = set()
+    while len(names) < 3:
+        names.add(_generate_chinese_company_name())
+    player_company, ai_company1, ai_company2 = list(names)
+    return player_company, ai_company1, ai_company2
+
+
 @app.post("/api/init")
 def init_game(payload: InitSettings, authorization: Annotated[str | None, Header()] = None):
     # Get Key from Header
@@ -97,11 +117,14 @@ def init_game(payload: InitSettings, authorization: Annotated[str | None, Header
     
     print(f"[{STORAGE_MODE}] Initializing game...")
     initial_data = LLMEngine.init_game(payload.settings, api_key)
+
+    # 生成随机中文公司名：玩家公司 + 2 家 AI 公司
+    player_company, ai_company1, ai_company2 = _generate_company_set()
     
     new_state = {
         "game_id": "default_room",
         "round_id": 1,
-        "company_name": "Nexus Corp",
+        "company_name": player_company,
         "turn": 1,
         "attributes": initial_data.get("initial_attributes", {
             "cash": 1000,
@@ -111,22 +134,22 @@ def init_game(payload: InitSettings, authorization: Annotated[str | None, Header
         }),
         "players": [
             {
-                "id": "player_human",
-                "name": "CEO (玩家)",
+                "id": "company_player",
+                "name": f"{player_company}（你）",
                 "type": "human",
-                "position": "ceo"
+                "position": "company"
             },
             {
-                "id": "player_ai_tech",
-                "name": "CTO (AI)",
+                "id": "company_ai_alpha",
+                "name": f"{ai_company1}（AI）",
                 "type": "ai",
-                "position": "cto"
+                "position": "company"
             },
             {
-                "id": "player_ai_market",
-                "name": "CMO (AI)",
+                "id": "company_ai_beta",
+                "name": f"{ai_company2}（AI）",
                 "type": "ai",
-                "position": "cmo"
+                "position": "company"
             }
         ],
         "history": [

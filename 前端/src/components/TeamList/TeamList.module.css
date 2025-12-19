@@ -27,12 +27,12 @@
     margin-bottom: 0px;
     opacity: 0.9;
     font-size: 0.7rem;
-    /* Smaller font */
-    height: 1.1rem;
+    /* 允许多行高度，避免文字挤在一起 */
 }
 
 .playerName {
     font-weight: bold;
+    flex: 1;
 }
 
 .playerPosition {

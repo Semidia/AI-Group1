@@ -7,15 +7,16 @@ import EventLog from './components/EventLog/EventLog';
 import { EventMonitor } from './components/EventMonitor/EventMonitor';
 import { initGame, sendAction, sendActionStream, configureApi } from './engine/api';
 // Re-import local engine for Demo Mode
-import { initialState, processDecision } from './engine/gameLogic';
+import { initialState, processDecision, generateCompanySet } from './engine/gameLogic';
 import { mockAI } from './engine/mockAI';
 import { helpContent } from './engine/helpContent';
 import { eventManager } from './engine/eventSystem';
 import './index.css';
 
 // Default state to prevent UI crash before API loads
+const defaultCompanies = generateCompanySet();
 const defaultState = {
-  companyName: "Nexus Corp",
+  companyName: defaultCompanies.companyName,
   turn: 0,
   attributes: {
     cash: 1000,
@@ -23,26 +24,8 @@ const defaultState = {
     reputation: 50,
     innovation: 10
   },
-  players: [
-    {
-      id: "player_human",
-      name: "CEO (你)",
-      type: "human",
-      position: "ceo"
-    },
-    {
-      id: "player_ai_tech",
-      name: "CTO (AI)",
-      type: "ai",
-      position: "cto"
-    },
-    {
-      id: "player_ai_market",
-      name: "CMO (AI)",
-      type: "ai",
-      position: "cmo"
-    }
-  ],
+  // 不同公司之间竞争：玩家公司 + 两家 AI 公司（前端本地占位）
+  players: defaultCompanies.players,
   history: [
     { id: -1, type: 'system', text: "正在初始化..." }
   ]
@@ -769,7 +752,7 @@ function App() {
           EVERY WALL IS A DOOR
         </h1>
         <div style={{ fontSize: '0.75rem', color: 'var(--color-muted)', marginTop: '5px' }}>
-          CEO: 玩家 | Turn: {gameState.turn} | Mode: <span style={{ color: gameMode === 'official' ? '#0f0' : '#0ff' }}>{gameMode === 'official' ? 'Official' : 'Demo'}</span>
+          公司: {gameState.companyName} | Turn: {gameState.turn} | Mode: <span style={{ color: gameMode === 'official' ? '#0f0' : '#0ff' }}>{gameMode === 'official' ? 'Official' : 'Demo'}</span>
         </div>
 
         {/* Help Button */}

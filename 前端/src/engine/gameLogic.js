@@ -1,7 +1,57 @@
 import { eventManager, generateProgressOutput } from './eventSystem.js';
 
+// --- 工具：生成随机中文公司名 ---
+const COMPANY_PREFIXES = ["星河", "量子", "蓝海", "晨曦", "未来", "鸿蒙", "极光", "深空", "云岚", "燎原"];
+const COMPANY_MIDDLES = ["科", "数", "智", "新", "云", "链", "芯", "网", "创", "数智"];
+const COMPANY_SUFFIXES = ["科技", "集团", "资本", "网络", "创新", "智能", "控股", "系统", "实验室", "科技有限公司"];
+
+function randomFrom(list) {
+    return list[Math.floor(Math.random() * list.length)];
+}
+
+function generateChineseCompanyName() {
+    const prefix = randomFrom(COMPANY_PREFIXES);
+    const middle = Math.random() < 0.6 ? randomFrom(COMPANY_MIDDLES) : "";
+    const suffix = randomFrom(COMPANY_SUFFIXES);
+    return `${prefix}${middle}${suffix}`;
+}
+
+export function generateCompanySet() {
+    const nameSet = new Set();
+    while (nameSet.size < 3) {
+        nameSet.add(generateChineseCompanyName());
+    }
+    const [playerCompany, aiCompany1, aiCompany2] = Array.from(nameSet);
+
+    return {
+        companyName: playerCompany,
+        players: [
+            {
+                id: "company_player",
+                name: `${playerCompany}（你）`,
+                type: "human",
+                position: "company"
+            },
+            {
+                id: "company_ai_alpha",
+                name: `${aiCompany1}（AI）`,
+                type: "ai",
+                position: "company"
+            },
+            {
+                id: "company_ai_beta",
+                name: `${aiCompany2}（AI）`,
+                type: "ai",
+                position: "company"
+            }
+        ]
+    };
+}
+
+const generated = generateCompanySet();
+
 export const initialState = {
-    companyName: "Nexus Corp",
+    companyName: generated.companyName,
     turn: 1,
     attributes: {
         cash: 1000,
@@ -11,31 +61,12 @@ export const initialState = {
     },
     activeEvents: [], // 当前活跃事件
     systemPrompts: [], // 待注入的系统提示
-    players: [
-        {
-            id: "player_human",
-            name: "CEO (你)",
-            type: "human",
-            position: "ceo"
-        },
-        {
-            id: "player_ai_tech",
-            name: "CTO (AI)",
-            type: "ai",
-            position: "cto"
-        },
-        {
-            id: "player_ai_market",
-            name: "CMO (AI)",
-            type: "ai",
-            position: "cmo"
-        }
-    ],
+    players: generated.players,
     history: [
         {
             id: 0,
             type: 'system',
-            text: "欢迎来到《凡墙皆是门》。你已被任命为 Nexus Corp 的首席执行官。"
+            text: `欢迎来到《凡墙皆是门》。你现在是「${generated.companyName}」的最高决策者。`
         },
         {
             id: 1,
@@ -45,7 +76,7 @@ export const initialState = {
         {
             id: 2,
             type: 'system',
-            text: "Nexus Corp 成立于2035年，专注于量子计算和神经接口技术开发。创始人在一次实验室事故中失踪，留下了这家处于转型期的科技公司。"
+            text: `${generated.companyName} 成立于2035年，专注于前沿科技与智能系统开发。创始人在一次实验室事故中失踪，留下了这家处于转型期的科技公司。`
         },
         {
             id: 3,
@@ -55,7 +86,7 @@ export const initialState = {
         {
             id: 4,
             type: 'system',
-            text: "- 资金链紧张：量子计算项目超支，现金储备仅够维持3个月\n- 团队分裂：研发部坚持继续量子项目，市场部要求转向更赚钱的神经接口\n- 声誉危机：媒体质疑公司的技术安全性，股价下跌20%\n- 创新停滞：核心团队流失，新想法难产"
+            text: "- 资金链紧张：核心项目超支，现金储备仅够维持3个月\n- 团队分裂：技术团队与市场团队战略分歧严重\n- 声誉危机：媒体质疑公司的技术安全性，股价下跌20%\n- 创新停滞：核心团队流失，新想法难产"
         },
         {
             id: 5,
@@ -65,7 +96,7 @@ export const initialState = {
         {
             id: 6,
             type: 'system',
-            text: "科技巨头 Quantum Dynamics 正准备推出下一代量子计算机，将彻底改变行业格局。神经接口领域竞争激烈，多家初创公司获得大额融资。"
+            text: "科技巨头正准备推出颠覆性的产品，将彻底改变行业格局。赛道上多家初创公司获得大额融资，竞争异常激烈。"
         },
         {
             id: 7,
@@ -75,7 +106,7 @@ export const initialState = {
         {
             id: 8,
             type: 'system',
-            text: "带领 Nexus Corp 走出困境，决定公司的未来方向。是坚持量子计算的长期愿景，还是转向更务实的神经接口业务？每一个决定都将影响公司的命运。"
+            text: `带领 ${generated.companyName} 走出困境，决定公司的未来方向。你的每一个决策都会在市场和团队中产生连锁反应。`
         },
         {
             id: 9,

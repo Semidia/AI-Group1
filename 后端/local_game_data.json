@@ -4786,6 +4786,359 @@
         "reputation_rule": "Reputation_Next = Reputation - 2 (Market_Decay) + Innovation * 0.5 (Tech_Prestige) + Action_Effect",
         "innovation_rule": "Innovation_Next = Innovation - 1 (Knowledge_Depreciation) + Morale * 0.2 (Team_Creativity) + Action_Effect"
       }
+    },
+    {
+      "game_id": "default_room",
+      "round_id": 1,
+      "company_name": "Nexus Corp",
+      "turn": 1,
+      "attributes": {
+        "cash": 1000,
+        "morale": 50,
+        "reputation": 50,
+        "innovation": 10
+      },
+      "players": [
+        {
+          "id": "player_human",
+          "name": "CEO (玩家)",
+          "type": "human",
+          "position": "ceo"
+        },
+        {
+          "id": "player_ai_tech",
+          "name": "CTO (AI)",
+          "type": "ai",
+          "position": "cto"
+        },
+        {
+          "id": "player_ai_market",
+          "name": "CMO (AI)",
+          "type": "ai",
+          "position": "cmo"
+        }
+      ],
+      "history": [
+        {
+          "id": 1766141103,
+          "type": "system",
+          "text": "在2035年的新深圳，你创立了'破壁科技'——一家专注于脑机接口技术的小型初创公司。这个世界正处于第四次工业革命的浪潮中，传统行业壁垒正在瓦解，凡墙皆是门，但每扇门后都隐藏着未知的风险与机遇。\n\n你的公司位于南山区一个不起眼的共享办公空间，团队只有12名成员，但每个人都怀揣着改变世界的梦想。你们的核心技术'思维桥'能够实现人脑与数字设备的直接交互，这项技术一旦成熟，将彻底改变教育、医疗、娱乐等各个领域。\n\n然而，这个市场早已被巨头盯上：\n- '天穹集团'：传统科技巨头，拥有雄厚的资本和政府关系，正在通过收购和专利战打压新兴竞争者\n- '神经元科技'：你的直接竞争对手，由斯坦福归国团队创立，技术路线相似但更注重商业化\n- '深港创投联盟'：本地投资机构，既可能是你的救星，也可能成为控制你的枷锁\n- 政府监管部门：正在制定脑机接口伦理规范，政策风向随时可能改变\n\n更微妙的是团队内部：首席科学家张教授坚持'技术至上'，希望专注于基础研究；而COO李总则主张'快速商业化'，通过现有技术变现维持公司生存。两人的矛盾正在影响团队士气。\n\n今天是公司成立后的第一个半年，银行账户里仅剩的1000万资金只够支撑6个月。窗外，天穹集团的新总部大楼正在封顶，巨大的LED屏幕上滚动着'连接未来'的标语。你的第一个决策，将决定破壁科技是成为下一个颠覆者，还是众多失败者名单上的又一个注脚。"
+        }
+      ],
+      "current_options": [
+        {
+          "id": "1",
+          "label": "接受深港创投的A轮投资",
+          "desc": "深港创投愿意投资2000万，换取30%股权和董事会席位。这会立即解决资金危机，但意味着失去部分控制权。",
+          "cost": 0,
+          "cost_desc": "股权稀释：30%",
+          "predicted_effect": "Cash +2000, Morale +15 (资金安全感), Reputation +10 (获得背书), Innovation -5 (投资人可能干预研究方向)"
+        },
+        {
+          "id": "2",
+          "label": "推出'思维桥Lite'测试版",
+          "desc": "将现有技术简化为消费级产品，通过预售获得现金流。风险是可能暴露技术细节给竞争对手。",
+          "cost": 300,
+          "cost_desc": "市场推广：300",
+          "predicted_effect": "Cash +500 (预售收入), Morale +5 (产品落地), Reputation +15 (市场曝光), Innovation +3 (用户反馈)"
+        },
+        {
+          "id": "3",
+          "label": "与神经元科技进行技术合作",
+          "desc": "对方提出共享部分专利，共同开发教育市场。这能加速研发，但可能培养未来的竞争对手。",
+          "cost": 100,
+          "cost_desc": "法律与谈判：100",
+          "predicted_effect": "Cash -100, Morale -10 (团队反对与对手合作), Reputation +20 (行业认可), Innovation +15 (技术互补)"
+        },
+        {
+          "id": "4",
+          "label": "专注攻克'长期植入'技术难关",
+          "desc": "让张教授带领团队全力攻关核心技术。这需要消耗大量资金，但一旦突破将建立绝对技术壁垒。",
+          "cost": 800,
+          "cost_desc": "研发投入：800",
+          "predicted_effect": "Cash -800, Morale +20 (技术团队士气高涨), Reputation +5 (学术圈关注), Innovation +25 (重大突破可能)"
+        },
+        {
+          "id": "5",
+          "label": "挖角天穹集团的核心工程师",
+          "desc": "秘密招募对方脑机接口团队的骨干。高薪诱惑可能成功，但一旦被发现将引发激烈报复。",
+          "cost": 400,
+          "cost_desc": "猎头费用与签约奖金：400",
+          "predicted_effect": "Cash -400, Morale +10 (团队实力增强), Reputation -15 (行业负面评价), Innovation +20 (获得成熟经验)"
+        }
+      ],
+      "passive_rules": {
+        "income_base": "Passive_Income = Innovation * 8 + Reputation * 3",
+        "expense_base": "Base_Expense = 50 + Team_Size * 5",
+        "team_size": 12,
+        "random_event_range": "±20% of current attribute",
+        "crisis_threshold": "Morale < 30 triggers additional -10 penalty",
+        "burnout_threshold": "Morale > 80 gives +5 Innovation bonus, Morale < 40 gives -5 Innovation penalty"
+      },
+      "formulas": {
+        "cash_rule": "Cash_Next = Cash - Expense_Base + (Innovation * 8) + (Reputation * 3) + Action_Effect_Cash - Random_Event_Impact",
+        "morale_rule": "Morale_Next = Morale - (100 - Morale)/20 + (Cash/1000) + Action_Effect_Morale - Crisis_Penalty",
+        "reputation_rule": "Reputation_Next = Reputation + (Innovation/5) + (Morale/10) + Action_Effect_Reputation - Scandal_Impact",
+        "innovation_rule": "Innovation_Next = Innovation + (Morale/15) + (Cash/2000) + Action_Effect_Innovation - Burnout_Penalty"
+      }
+    },
+    {
+      "game_id": "default_room",
+      "round_id": 1,
+      "company_name": "Nexus Corp",
+      "turn": 1,
+      "attributes": {
+        "cash": 800,
+        "morale": 30,
+        "reputation": 20,
+        "innovation": 15
+      },
+      "players": [
+        {
+          "id": "player_human",
+          "name": "CEO (玩家)",
+          "type": "human",
+          "position": "ceo"
+        },
+        {
+          "id": "player_ai_tech",
+          "name": "CTO (AI)",
+          "type": "ai",
+          "position": "cto"
+        },
+        {
+          "id": "player_ai_market",
+          "name": "CMO (AI)",
+          "type": "ai",
+          "position": "cmo"
+        }
+      ],
+      "history": [
+        {
+          "id": 1766141285,
+          "type": "system",
+          "text": "在2045年的新深圳，你继承了父亲留下的‘墙门科技’——一家濒临破产的脑机接口初创公司。父亲生前坚信‘凡墙皆是门’，每个技术壁垒都能转化为商业机会，却因一次失败的公开演示导致公司声誉扫地，负债累累。如今，你站在空荡的办公室，面对的是：银行催收的最后一笔贷款、核心团队仅剩的三人（士气低迷的工程师李薇、愤世嫉俗的市场总监老陈、过度乐观的实习生小吴），以及行业巨头‘神经元集团’的虎视眈眈——他们正低价收购破产公司以垄断市场。与此同时，地下黑客组织‘破壁者’向你抛出橄榄枝，承诺提供开源技术，但要求共享用户数据；政府创新基金则设下严苛的伦理审查。你的第一个半年，现金只够发三个月工资，而父亲留下的最后笔记写着：‘第六十四卦，未济。火在水上，事未成。但火能沸水，水能灭火——转机在失衡中。’多方博弈就此展开：是向资本低头，还是赌一把边缘创新？每堵墙后，都可能有一扇门，或另一堵墙。"
+        }
+      ],
+      "current_options": [
+        {
+          "id": "1",
+          "label": "接受神经元集团的收购要约",
+          "desc": "以低价出售公司60%股权，换取即时现金注入和资源支持，但丧失控制权。",
+          "cost": -500,
+          "cost_desc": "股权转让收益：+500 Cash",
+          "predicted_effect": "Cash +500, Morale -15 (团队失望), Reputation -10 (被视为投降), Innovation -5 (研发受限)"
+        },
+        {
+          "id": "2",
+          "label": "与破壁者合作开发开源版本",
+          "desc": "利用黑客组织的开源代码快速推出低成本产品，但面临法律和伦理风险。",
+          "cost": 200,
+          "cost_desc": "技术整合成本：200 Cash",
+          "predicted_effect": "Cash -200, Morale +10 (团队兴奋), Reputation -5 (争议性), Innovation +20 (技术跃进)"
+        },
+        {
+          "id": "3",
+          "label": "申请政府创新基金",
+          "desc": "提交详细伦理和技术方案，争取六个月后的资金评审，期间需严格自律。",
+          "cost": 100,
+          "cost_desc": "申请材料准备：100 Cash",
+          "predicted_effect": "Cash -100, Morale +5 (希望感), Reputation +10 (合规形象), Innovation +5 (规范化研发)"
+        },
+        {
+          "id": "4",
+          "label": "裁员并聚焦单一产品线",
+          "desc": "裁减一半团队，集中资源完成父亲未竟的‘记忆接口’原型，背水一战。",
+          "cost": 0,
+          "cost_desc": "无直接现金成本",
+          "predicted_effect": "Cash +0 (节省薪资), Morale -20 (团队恐慌), Reputation -15 (负面舆论), Innovation +10 (专注度提升)"
+        }
+      ],
+      "passive_rules": {
+        "income_base": 0,
+        "expense_base": 50,
+        "fatigue_decay": 5,
+        "market_forgetfulness": 3,
+        "knowledge_depreciation": 2
+      },
+      "formulas": {
+        "cash_rule": "Cash_Next = Cash - 50 (Base_Expense) + (Innovation * 5) + (Reputation * 2) + Action_Effect_Cash",
+        "morale_rule": "Morale_Next = Morale - 5 (Fatigue_Decay) + (Cash / 100) + Action_Effect_Morale",
+        "reputation_rule": "Reputation_Next = Reputation - 3 (Market_Forgetfulness) + (Innovation / 5) + Action_Effect_Reputation",
+        "innovation_rule": "Innovation_Next = Innovation - 2 (Knowledge_Depreciation) + (Morale / 10) + Action_Effect_Innovation"
+      }
+    },
+    {
+      "game_id": "default_room",
+      "round_id": 1,
+      "company_name": "云岚科网络",
+      "turn": 1,
+      "attributes": {
+        "cash": 800,
+        "morale": 60,
+        "reputation": 30,
+        "innovation": 15
+      },
+      "players": [
+        {
+          "id": "company_player",
+          "name": "云岚科网络（你）",
+          "type": "human",
+          "position": "company"
+        },
+        {
+          "id": "company_ai_alpha",
+          "name": "蓝海网络（AI）",
+          "type": "ai",
+          "position": "company"
+        },
+        {
+          "id": "company_ai_beta",
+          "name": "量子数科技（AI）",
+          "type": "ai",
+          "position": "company"
+        }
+      ],
+      "history": [
+        {
+          "id": 1766141506,
+          "type": "system",
+          "text": "在2045年的新上海，你创立了‘门墙科技’——一家专注于‘感知增强界面’的初创公司。这个世界中，传统物理边界已被数字覆盖层重新定义，每一面墙都可能成为通往虚拟空间的入口，但技术垄断巨头‘视界集团’掌控着90%的市场份额。你的公司凭借一项突破性的‘神经触觉反馈算法’获得了天使投资，这项技术能让用户通过触摸真实墙面感知虚拟物体的纹理和温度。然而，视界集团已开始通过专利诉讼、人才挖角和市场挤压多管齐下，试图将你扼杀在摇篮中。同时，地下黑客组织‘破壁者’暗中接触你，他们视你的技术为打破数字寡头垄断的关键，但合作可能招致法律风险。政府科创部门则观望你的发展，承诺在达到一定创新指标后提供补贴，但要求共享部分数据。你必须在资金有限、团队士气初建、行业声誉未立、技术尚待完善的局面下，于多方博弈的夹缝中寻找生存与发展之路。每一面墙都可能是机会之门，也可能是陷阱之墙。"
+        }
+      ],
+      "current_options": [
+        {
+          "id": "1",
+          "label": "加速原型开发",
+          "desc": "集中资源完成‘神经触觉墙’原型机，争取在三个月内展示给潜在客户。",
+          "cost": 200,
+          "cost_desc": "研发投入：200现金",
+          "predicted_effect": "创新+8，现金-200，士气+5（团队看到进展），但可能因过度加班导致后续士气-3"
+        },
+        {
+          "id": "2",
+          "label": "与破壁者秘密会面",
+          "desc": "在地下数据中心会见黑客组织代表，探讨技术合作的可能性。",
+          "cost": 50,
+          "cost_desc": "安全与联络费用：50现金",
+          "predicted_effect": "声望+10（获得边缘科技圈认可），创新+5（获取非正统技术见解），但若泄露可能声誉-15（法律风险）"
+        },
+        {
+          "id": "3",
+          "label": "降价促销早期版本",
+          "desc": "将现有简化版界面软件降价30%销售，快速获取现金流。",
+          "cost": 0,
+          "cost_desc": "无直接成本，但影响定价策略",
+          "predicted_effect": "现金+150（短期收入），声望-5（可能被视为廉价品牌），创新-2（资源分散）"
+        },
+        {
+          "id": "4",
+          "label": "申请政府科创基金",
+          "desc": "花费精力准备材料，申请‘数字边界突破’专项补贴。",
+          "cost": 80,
+          "cost_desc": "材料与咨询费用：80现金",
+          "predicted_effect": "若成功现金+300（6个月后到账），声望+8（官方背书），但失败则现金-80，士气-10"
+        }
+      ],
+      "passive_rules": {
+        "income_base": 0,
+        "expense_base": 50,
+        "burnout_rate": 3,
+        "market_decay": 2,
+        "knowledge_depreciation": 1
+      },
+      "formulas": {
+        "cash_rule": "Cash_Next = Cash - 50 (Base_Expense) + Innovation * 8 (Tech_Value) + Reputation * 3 (Brand_Effect) + Action_Effect_Cash",
+        "morale_rule": "Morale_Next = Morale - 3 (Burnout_Rate) + Cash/100 (Financial_Security) + Action_Effect_Morale",
+        "reputation_rule": "Reputation_Next = Reputation - 2 (Market_Decay) + Innovation/5 (Tech_Prestige) + Action_Effect_Reputation",
+        "innovation_rule": "Innovation_Next = Innovation - 1 (Knowledge_Depreciation) + Morale/20 (Team_Creativity) + Action_Effect_Innovation"
+      }
+    },
+    {
+      "game_id": "default_room",
+      "round_id": 1,
+      "company_name": "鸿蒙芯控股",
+      "turn": 1,
+      "attributes": {
+        "cash": 800,
+        "morale": 60,
+        "reputation": 40,
+        "innovation": 15
+      },
+      "players": [
+        {
+          "id": "company_player",
+          "name": "鸿蒙芯控股（你）",
+          "type": "human",
+          "position": "company"
+        },
+        {
+          "id": "company_ai_alpha",
+          "name": "深空云科技（AI）",
+          "type": "ai",
+          "position": "company"
+        },
+        {
+          "id": "company_ai_beta",
+          "name": "未来科创新（AI）",
+          "type": "ai",
+          "position": "company"
+        }
+      ],
+      "history": [
+        {
+          "id": 1766141509,
+          "type": "system",
+          "text": "在2045年的新上海，你继承了父亲留下的小型科技公司'门扉科技'。公司专注于开发'认知增强接口'技术，能让人类通过思维直接与数字世界交互。然而，这项技术正处于多方势力的博弈中心。全球科技巨头'天穹集团'试图收购你的公司以垄断市场；政府监管机构'数字伦理委员会'对你的技术持怀疑态度，担心其社会影响；地下黑客组织'思维解放阵线'则想窃取你的源代码，实现'技术民主化'。你的父亲在去世前留下遗言：'凡墙皆是门'，暗示这项技术可能打开人类认知的新维度，也可能成为控制思想的工具。公司目前只有10名核心员工，资金紧张，但拥有初步的原型技术。你必须在这半年内做出关键决策，平衡技术开发、商业生存和道德考量，同时应对各方势力的暗中角力。"
+        }
+      ],
+      "current_options": [
+        {
+          "id": "1",
+          "label": "接受天穹集团的收购要约",
+          "desc": "以优厚条件出售公司，获得资金但失去控制权",
+          "cost": 0,
+          "cost_desc": "无直接成本，但永久性决策",
+          "predicted_effect": "Cash +2000, Morale -30 (团队失落), Reputation -20 (被视为投降), Innovation -10 (研发停滞)"
+        },
+        {
+          "id": "2",
+          "label": "向数字伦理委员会申请技术认证",
+          "desc": "争取政府认可，建立合规形象",
+          "cost": 300,
+          "cost_desc": "认证费用：300",
+          "predicted_effect": "Cash -300, Morale +10 (合法性提升), Reputation +25 (官方背书), Innovation +5 (规范促进)"
+        },
+        {
+          "id": "3",
+          "label": "与思维解放阵线进行秘密谈判",
+          "desc": "探索开源合作可能性，但风险极高",
+          "cost": 150,
+          "cost_desc": "安全措施与谈判成本：150",
+          "predicted_effect": "Cash -150, Morale -15 (道德压力), Reputation -30 (关联黑客), Innovation +20 (技术突破)"
+        },
+        {
+          "id": "4",
+          "label": "加速原型产品市场化",
+          "desc": "快速推出简化版产品获取现金流",
+          "cost": 400,
+          "cost_desc": "生产与营销投入：400",
+          "predicted_effect": "Cash -400 + [Innovation*15] (预计收入), Morale +20 (成果可见), Reputation +15 (市场存在), Innovation -5 (短期导向)"
+        }
+      ],
+      "passive_rules": {
+        "income_base": 0,
+        "expense_base": 50,
+        "morale_decay_base": 5,
+        "reputation_decay_base": 3,
+        "innovation_decay_base": 4
+      },
+      "formulas": {
+        "cash_rule": "Cash_Next = Cash - 50 (Base_Expense) + Innovation * 8 (Tech_Value) + Reputation * 3 (Investor_Interest) + Action_Effect_Cash",
+        "morale_rule": "Morale_Next = Morale - 5 (Industry_Pressure) + Cash/100 (Financial_Security) + Action_Effect_Morale",
+        "reputation_rule": "Reputation_Next = Reputation - 3 (Competitor_Smear) + Innovation/2 (Tech_Leadership) + Action_Effect_Reputation",
+        "innovation_rule": "Innovation_Next = Innovation - 4 (Knowledge_Decay) + Morale/10 (Team_Creativity) + Action_Effect_Innovation"
+      }
     }
   ]
 }
