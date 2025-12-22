@@ -92,3 +92,37 @@ npm run dev
 - React Router (路由)
 - Socket.io-client (WebSocket)
 
+## 架构设计
+
+### 后端架构
+
+#### Socket处理器架构（必须采纳）
+```
+backend/src/socket/
+├── roomHandler.ts    # 房间加入/离开/匹配逻辑
+├── gameHandler.ts    # 回合切换/博弈逻辑校验/计时器
+├── messageHandler.ts # 消息路由和广播
+└── index.ts          # Socket.io初始化
+```
+
+#### 状态同步机制（必须采纳）
+- **后端驱动**：所有状态变更在后端计算，前端仅发送动作
+- **Redis状态存储**：活跃房间状态存储在Redis，历史数据存储在PostgreSQL
+- **断线重连**：从Redis读取快照恢复游戏状态
+
+### 前端架构
+
+#### Hooks层封装（建议采纳）
+```
+frontend/src/hooks/
+├── useSocket.ts      # Socket连接管理
+├── useGameLoop.ts    # 游戏循环逻辑
+├── useRoom.ts        # 房间相关逻辑
+└── useGameState.ts   # 游戏状态管理
+```
+
+#### 组件拆分优化（建议采纳）
+- GameBoard（游戏主面板）与Sidebar（侧边栏）分离
+- 使用React.memo避免频繁Socket更新导致整页重绘
+- 状态隔离，每个组件只订阅需要的数据
+

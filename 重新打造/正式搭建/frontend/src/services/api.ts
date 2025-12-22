@@ -12,24 +12,24 @@ const apiClient = axios.create({
 
 // Request interceptor - Add token
 apiClient.interceptors.request.use(
-  (config) => {
+  config => {
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
-  (error) => {
+  error => {
     return Promise.reject(error);
   }
 );
 
 // Response interceptor - Handle errors
 apiClient.interceptors.response.use(
-  (response) => {
+  response => {
     return response.data;
   },
-  (error) => {
+  error => {
     if (error.response?.status === 401) {
       // Token expired or invalid
       localStorage.removeItem('token');
@@ -40,4 +40,3 @@ apiClient.interceptors.response.use(
 );
 
 export default apiClient;
-

@@ -32,6 +32,7 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use('/uploads', express.static('uploads')); // Serve uploaded files
 app.use(rateLimiter);
 
 // Health check
@@ -43,10 +44,16 @@ app.get('/health', (req, res) => {
 import testRoutes from './routes/test';
 app.use('/api', testRoutes);
 
-// API routes will be added here
-// TODO: Add routes in Phase 2
-// app.use('/api/auth', authRoutes);
-// app.use('/api/rooms', roomRoutes);
+// API routes
+// Phase 2: Auth routes
+import authRoutes from './routes/auth';
+import userRoutes from './routes/user';
+import roomRoutes from './routes/rooms';
+app.use('/api/auth', authRoutes);
+app.use('/api/user', userRoutes);
+app.use('/api/rooms', roomRoutes);
+
+// TODO: Add routes in Phase 3
 // app.use('/api/game', gameRoutes);
 
 // Error handling

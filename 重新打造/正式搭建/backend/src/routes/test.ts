@@ -11,7 +11,8 @@ const router = Router();
  */
 router.get('/test/db', async (req, res) => {
   try {
-    await prisma.$connect();
+    // 尝试执行一个简单的查询来测试连接
+    await prisma.$queryRaw`SELECT 1`;
     logger.info('Database connection test: success');
     res.json({ 
       status: 'ok', 
@@ -20,9 +21,15 @@ router.get('/test/db', async (req, res) => {
     });
   } catch (error: any) {
     logger.error('Database connection test failed:', error);
+    const errorMessage = error.message || 'Database connection failed';
+    const errorCode = error.code || 'UNKNOWN';
     res.status(500).json({ 
       status: 'error', 
-      message: error.message || 'Database connection failed'
+      message: errorMessage,
+      code: errorCode,
+      hint: errorCode === 'P1001' ? '无法连接到数据库服务器，请检查DATABASE_URL配置和PostgreSQL服务状态' : 
+            errorCode === 'P1003' ? '数据库不存在，请先创建数据库或检查DATABASE_URL' :
+            '请检查数据库配置和连接状态'
     });
   }
 });
@@ -43,9 +50,11 @@ router.get('/test/redis', async (req, res) => {
     });
   } catch (error: any) {
     logger.error('Redis connection test failed:', error);
-    res.status(500).json({ 
-      status: 'error', 
-      message: error.message || 'Redis connection failed'
+    // Redis是可选的，返回200但标记为警告
+    res.status(200).json({ 
+      status: 'warning', 
+      message: error.message || 'Redis connection failed (optional)',
+      note: 'Redis是可选的，不影响核心功能'
     });
   }
 });

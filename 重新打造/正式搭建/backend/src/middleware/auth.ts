@@ -2,6 +2,18 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { AppError } from './errorHandler';
 
+class AuthError extends Error implements AppError {
+  statusCode?: number;
+  code?: string;
+
+  constructor(message: string, statusCode = 401, code?: string) {
+    super(message);
+    this.statusCode = statusCode;
+    this.code = code;
+    this.name = 'AuthError';
+  }
+}
+
 export interface AuthRequest extends Request {
   userId?: string;
   username?: string;
@@ -16,12 +28,12 @@ export const authenticateToken = (
   const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
-    throw new AppError('Authentication token required', 401);
+    throw new AuthError('Authentication token required', 401);
   }
 
   const jwtSecret = process.env.JWT_SECRET;
   if (!jwtSecret) {
-    throw new AppError('JWT secret not configured', 500);
+    throw new AuthError('JWT secret not configured', 500);
   }
 
   try {
@@ -30,7 +42,7 @@ export const authenticateToken = (
     req.username = decoded.username;
     next();
   } catch (error) {
-    throw new AppError('Invalid or expired token', 401);
+    throw new AuthError('Invalid or expired token', 401);
   }
 };
 

@@ -7,14 +7,13 @@ const { Title, Text } = Typography;
 function TestWebSocket() {
   const [connected, setConnected] = useState(false);
   const [messages, setMessages] = useState<string[]>([]);
-  const [socketId, setSocketId] = useState<string>('');
 
   useEffect(() => {
     // 尝试从localStorage获取token，如果没有则使用测试token
     const token = localStorage.getItem('token') || 'test-token';
-    
+
     wsService.connect(token);
-    
+
     wsService.on('connect', () => {
       setConnected(true);
       setMessages(prev => [...prev, `[${new Date().toLocaleTimeString()}] 已连接`]);
@@ -25,8 +24,11 @@ function TestWebSocket() {
       setMessages(prev => [...prev, `[${new Date().toLocaleTimeString()}] 已断开连接`]);
     });
 
-    wsService.on('error', (error: any) => {
-      setMessages(prev => [...prev, `[${new Date().toLocaleTimeString()}] 错误: ${JSON.stringify(error)}`]);
+    wsService.on('error', (error: unknown) => {
+      setMessages(prev => [
+        ...prev,
+        `[${new Date().toLocaleTimeString()}] 错误: ${JSON.stringify(error)}`,
+      ]);
     });
 
     return () => {
@@ -53,26 +55,18 @@ function TestWebSocket() {
     <div style={{ padding: '24px', maxWidth: '800px', margin: '0 auto' }}>
       <Card>
         <Title level={2}>WebSocket 连接测试</Title>
-        
+
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
           <div>
             <Text strong>连接状态: </Text>
-            <Tag color={connected ? 'green' : 'red'}>
-              {connected ? '已连接' : '未连接'}
-            </Tag>
+            <Tag color={connected ? 'green' : 'red'}>{connected ? '已连接' : '未连接'}</Tag>
           </div>
 
           <Space>
-            <Button 
-              type="primary" 
-              onClick={handleSendTest}
-              disabled={!connected}
-            >
+            <Button type="primary" onClick={handleSendTest} disabled={!connected}>
               发送测试消息
             </Button>
-            <Button onClick={handleReconnect}>
-              重新连接
-            </Button>
+            <Button onClick={handleReconnect}>重新连接</Button>
           </Space>
 
           <div>
@@ -80,15 +74,15 @@ function TestWebSocket() {
             <List
               bordered
               dataSource={messages}
-              renderItem={(item) => (
+              renderItem={item => (
                 <List.Item>
                   <Text code>{item}</Text>
                 </List.Item>
               )}
-              style={{ 
-                maxHeight: '400px', 
+              style={{
+                maxHeight: '400px',
                 overflowY: 'auto',
-                marginTop: '8px'
+                marginTop: '8px',
               }}
             />
           </div>
@@ -106,4 +100,3 @@ function TestWebSocket() {
 }
 
 export default TestWebSocket;
-
