@@ -9,7 +9,7 @@ const router = Router();
  * GET /api/test/db
  * 测试数据库连接
  */
-router.get('/test/db', async (req, res) => {
+router.get('/test/db', async (_req, res) => {
   try {
     // 尝试执行一个简单的查询来测试连接
     await prisma.$queryRaw`SELECT 1`;
@@ -38,7 +38,7 @@ router.get('/test/db', async (req, res) => {
  * GET /api/test/redis
  * 测试Redis连接
  */
-router.get('/test/redis', async (req, res) => {
+router.get('/test/redis', async (_req, res) => {
   try {
     const result = await redis.ping();
     logger.info('Redis connection test: success');
@@ -63,7 +63,7 @@ router.get('/test/redis', async (req, res) => {
  * GET /api/test/websocket
  * 测试WebSocket连接信息
  */
-router.get('/test/websocket', (req, res) => {
+router.get('/test/websocket', (_req, res) => {
   res.json({
     status: 'ok',
     message: 'WebSocket server is running',

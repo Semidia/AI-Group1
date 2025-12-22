@@ -19,7 +19,7 @@ function Register() {
     setLoading(true);
     try {
       const registerData = { ...values };
-      delete registerData.confirmPassword;
+      delete (registerData as any).confirmPassword;
       const response = await authAPI.register(registerData);
       login(response.token, response.user);
       message.success('注册成功！');

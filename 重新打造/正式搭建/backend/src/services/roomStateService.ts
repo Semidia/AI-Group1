@@ -62,7 +62,7 @@ export const saveSessionState = async (
   sessionId: string,
   state: Record<string, unknown>
 ): Promise<SessionState> => {
-  const version = await redis.hincrby(sessionStateKey(sessionId), 'version', 1);
+  await redis.hincrby(sessionStateKey(sessionId), 'version', 1);
   await redis.hset(sessionStateKey(sessionId), 'payload', JSON.stringify(state));
   return getSessionState(sessionId);
 };

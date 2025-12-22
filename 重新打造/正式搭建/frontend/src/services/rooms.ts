@@ -70,6 +70,10 @@ export const roomAPI = {
   leave: async (roomId: string): Promise<void> => {
     await apiClient.post(`/rooms/${roomId}/leave`);
   },
+
+  close: async (roomId: string): Promise<void> => {
+    await apiClient.post(`/rooms/${roomId}/close`);
+  },
 };
 
 export const hostConfigAPI = {

@@ -38,8 +38,8 @@ const getOrCreateHostConfig = async (roomId: string, userId: string) => {
       apiConfig: {},
       apiProvider: null,
       apiEndpoint: null,
-      apiHeaders: null,
-      apiBodyTemplate: null,
+      apiHeaders: {},
+      apiBodyTemplate: {},
       totalDecisionEntities: room.maxPlayers,
       humanPlayerCount: Math.max(room.currentPlayers, 1),
       aiPlayerCount: 0,
@@ -138,7 +138,15 @@ router.get('/list', async (req, res, next) => {
     const limit = parsePositiveInt(req.query.limit, 20);
     const status = req.query.status as string | undefined;
 
-    const where = status ? { status: status.toString() } : {};
+    let where: { status?: any } = {};
+    if (!status) {
+      // 默认只展示活跃房间，避免已关闭/历史房间挤占列表
+      where = { status: { in: ['waiting', 'playing'] } };
+    } else if (status === 'all') {
+      where = {};
+    } else {
+      where = { status: status.toString() };
+    }
     const [rooms, total] = await Promise.all([
       prisma.room.findMany({
         where,
@@ -282,6 +290,65 @@ router.post('/:roomId/leave', authenticateToken, async (req: AuthRequest, res, n
     }
 
     res.json({ code: 200, message: '离开房间成功' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/rooms/:roomId/close
+ * 关闭房间（软删除）：仅房主可操作，房间从默认列表中隐藏
+ */
+router.post('/:roomId/close', authenticateToken, async (req: AuthRequest, res, next) => {
+  try {
+    const userId = req.userId;
+    if (!userId) throw new AppError('Unauthorized', 401);
+    const { roomId } = req.params;
+
+    const room = await ensureRoomHost(roomId, userId);
+
+    // 已关闭/已结束的房间幂等处理
+    if (room.status === 'closed' || room.status === 'finished') {
+      res.json({ code: 200, message: '房间已关闭', data: { room_id: roomId, status: room.status } });
+      return;
+    }
+
+    const now = new Date();
+
+    await prisma.$transaction([
+      prisma.roomPlayer.updateMany({
+        where: { roomId, status: { not: 'left' } },
+        data: { status: 'left', leftAt: now },
+      }),
+      prisma.room.update({
+        where: { id: roomId },
+        data: {
+          status: 'closed',
+          finishedAt: now,
+          currentPlayers: 0,
+        },
+      }),
+      prisma.gameSession.updateMany({
+        where: { roomId },
+        data: { status: 'finished' },
+      }),
+    ]);
+
+    try {
+      io.to(roomId).emit('system_message', {
+        roomId,
+        message: '房间已被房主关闭',
+        from: 'system',
+      });
+      io.to(roomId).emit('game_state_update', {
+        roomId,
+        status: 'closed',
+      });
+    } catch (emitErr) {
+      logger.warn('emit room closed events failed', emitErr);
+    }
+
+    res.json({ code: 200, message: '房间已关闭', data: { room_id: roomId, status: 'closed' } });
   } catch (error) {
     next(error);
   }

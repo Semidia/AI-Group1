@@ -9,7 +9,7 @@ import { useSocket } from '../hooks/useSocket';
 import { useMessageRouter } from '../hooks/useMessageRouter';
 
 function Rooms() {
-  const { token } = useAuthStore();
+  const { token, user } = useAuthStore();
   const navigate = useNavigate();
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [loading, setLoading] = useState(false);
@@ -137,6 +137,19 @@ function Rooms() {
     }
   };
 
+  const handleClose = async (roomId: string) => {
+    setActionRoomId(roomId);
+    try {
+      await roomAPI.close(roomId);
+      message.success('房间已关闭');
+      loadRooms();
+    } catch (err) {
+      message.error(getErrMsg(err, '关闭房间失败'));
+    } finally {
+      setActionRoomId(null);
+    }
+  };
+
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
       <Card title="创建房间">
@@ -192,6 +205,8 @@ function Rooms() {
                   room={room}
                   onJoin={handleJoin}
                   onLeave={handleLeave}
+                  onClose={handleClose}
+                  isHost={room.hostId === user?.userId}
                   loading={actionRoomId === room.id || loading}
                 />
               </Col>

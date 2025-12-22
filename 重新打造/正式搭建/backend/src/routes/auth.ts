@@ -51,8 +51,10 @@ const generateToken = (userId: string, username: string): string => {
 
   return jwt.sign(
     { userId, username },
-    jwtSecret,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    jwtSecret as jwt.Secret,
+    {
+      expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as jwt.SignOptions['expiresIn'],
+    }
   );
 };
 
@@ -79,13 +81,14 @@ router.post('/register', async (req, res, next) => {
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // Create user
+    // Create user，默认状态为 active
     const user = await prisma.user.create({
       data: {
         username,
         email,
         password: passwordHash,
         nickname: username,
+        status: 'active',
       },
       select: {
         id: true,
@@ -96,6 +99,7 @@ router.post('/register', async (req, res, next) => {
         level: true,
         experience: true,
         createdAt: true,
+        status: true,
       },
     });
 
@@ -141,6 +145,10 @@ router.post('/login', async (req, res, next) => {
       throw new AppErrorClass('Invalid username or password', 401);
     }
 
+    if (user.status === 'frozen') {
+      throw new AppErrorClass('Account is frozen, please contact administrator', 403);
+    }
+
     // Verify password
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
@@ -171,6 +179,7 @@ router.post('/login', async (req, res, next) => {
           avatarUrl: user.avatarUrl,
           level: user.level,
           experience: user.experience,
+          status: user.status,
         },
       },
     });
@@ -217,7 +226,7 @@ router.post('/forgot-password', async (req, res, next) => {
     // In production, implement email service here
     logger.info(`Password reset token generated for: ${email} (token: ${resetToken})`);
 
-    res.json({
+    return res.json({
       code: 200,
       message: 'If the email exists, a password reset link has been sent',
       // In development, return token for testing
@@ -225,9 +234,9 @@ router.post('/forgot-password', async (req, res, next) => {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      next(new AppErrorClass('Invalid input data', 400));
+      return next(new AppErrorClass('Invalid input data', 400));
     } else {
-      next(error);
+      return next(error);
     }
   }
 });

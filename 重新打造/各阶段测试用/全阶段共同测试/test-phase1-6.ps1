@@ -1,9 +1,9 @@
-# 前五阶段联合测试脚本 (PowerShell)
-# 顺序：阶段1/2 -> 阶段3 -> 阶段4 -> 阶段5（主持人配置）
+# 前六阶段联合测试脚本 (PowerShell)
+# 顺序：阶段1/2 -> 阶段3 -> 阶段4 -> 阶段5 -> 阶段6（游戏核心决策流程）
 $ErrorActionPreference = "Stop"
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "前五阶段联合测试" -ForegroundColor Cyan
+Write-Host "前六阶段联合测试" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -12,6 +12,7 @@ $phase12 = Join-Path $scriptRoot "test-phase1-2.ps1"
 $phase3 = Join-Path $scriptRoot "..\\已完成3阶段测试\\test-phase3.ps1"
 $phase4 = Join-Path $scriptRoot "..\\已完成4阶段测试\\test-phase4.ps1"
 $phase5 = Join-Path $scriptRoot "..\\已完成5阶段测试\\test-phase5.ps1"
+$phase6 = Join-Path $scriptRoot "..\\6阶段测试\\test-phase6.ps1"
 
 function Invoke-TestScript {
     param(
@@ -57,8 +58,10 @@ Run-Phase -label "阶段1/2 连续测试" -path $phase12
 Run-Phase -label "阶段3 房间基础流测试" -path $phase3
 Run-Phase -label "阶段4 WebSocket 最小实时子系统" -path $phase4
 Run-Phase -label "阶段5 主持人配置" -path $phase5
+Run-Phase -label "阶段6 游戏核心决策流程" -path $phase6
 
 Write-Host "========================================" -ForegroundColor Green
-Write-Host "🎉 前五阶段联合测试全部通过！" -ForegroundColor Green
+Write-Host "🎉 前六阶段联合测试全部通过！" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
+
 

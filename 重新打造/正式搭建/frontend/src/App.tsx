@@ -9,6 +9,7 @@ import TestWebSocket from './pages/TestWebSocket';
 import Rooms from './pages/Rooms';
 import WaitingRoom from './pages/WaitingRoom';
 import HostSetup from './pages/HostSetup';
+import GameSessionPage from './pages/GameSession';
 import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
 
@@ -49,6 +50,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <HostSetup />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/game/:sessionId"
+              element={
+                <ProtectedRoute>
+                  <GameSessionPage />
                 </ProtectedRoute>
               }
             />

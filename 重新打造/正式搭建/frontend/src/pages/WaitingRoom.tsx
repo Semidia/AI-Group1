@@ -149,9 +149,17 @@ function WaitingRoom() {
                     : '未连接'}
               </Tag>
               {currentRoom?.hostId === user?.userId && (
-                <Button type="primary" onClick={() => navigate(`/rooms/${roomId}/host-setup`)}>
-                  主持人配置
-                </Button>
+                <>
+                  <Button type="primary" onClick={() => navigate(`/rooms/${roomId}/host-setup`)}>
+                    主持人配置
+                  </Button>
+                  <Button
+                    type="default"
+                    onClick={() => navigate(`/rooms/${roomId}/host-setup`)}
+                  >
+                    开始游戏（通过主持人页）
+                  </Button>
+                </>
               )}
             </Space>
           }

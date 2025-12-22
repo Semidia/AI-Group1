@@ -132,7 +132,13 @@ function HostSetup() {
     if (!roomId) return;
     setSaving(true);
     try {
-      const data = await hostConfigAPI.updatePlayers(roomId, values);
+      const data = await hostConfigAPI.updatePlayers(roomId, {
+        totalDecisionEntities: values.totalDecisionEntities,
+        humanPlayerCount: values.humanPlayerCount,
+        aiPlayerCount: values.aiPlayerCount,
+        decisionTimeLimit: values.decisionTimeLimit,
+        timeoutStrategy: values.timeoutStrategy || 'auto_submit',
+      });
       setConfig(data);
       message.success('玩家配置已保存');
     } catch (error) {

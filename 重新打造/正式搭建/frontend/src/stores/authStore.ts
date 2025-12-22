@@ -2,7 +2,8 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 interface User {
-  userId: string;
+  id?: string;
+  userId?: string;
   username: string;
   nickname?: string;
   email?: string;
@@ -28,8 +29,12 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       login: (token: string, user: User) => {
+        const mappedUser: User = {
+          ...user,
+          userId: user.userId ?? user.id,
+        };
         localStorage.setItem('token', token);
-        set({ token, user, isAuthenticated: true });
+        set({ token, user: mappedUser, isAuthenticated: true });
       },
       logout: () => {
         localStorage.removeItem('token');
