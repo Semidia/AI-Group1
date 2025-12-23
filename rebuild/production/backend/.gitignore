@@ -9,6 +9,8 @@ dist/
 .env
 .env.local
 .env.*.local
+# 保留 .env.example 作为模板
+!.env.example
 
 # Logs
 logs/
@@ -37,4 +39,9 @@ coverage/
 
 # Docker
 docker-compose.override.yml
+
+# Database data (keep directory structure but ignore actual data)
+data/postgres/
+data/redis/
+!data/.gitkeep
 

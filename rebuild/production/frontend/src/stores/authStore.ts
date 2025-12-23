@@ -6,7 +6,6 @@ interface User {
   userId?: string;
   username: string;
   nickname?: string;
-  email?: string;
   avatarUrl?: string;
   level?: number;
   experience?: number;

@@ -3,7 +3,6 @@ import apiClient from './api';
 export interface AdminUser {
   id: string;
   username: string;
-  email?: string;
   nickname?: string | null;
   status: string;
   createdAt: string;

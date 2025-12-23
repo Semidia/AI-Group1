@@ -13,34 +13,46 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Starting database seeding...\n');
 
-  // 1. Ensure default developer account exists (should be created by server.ts, but double-check)
-  const adminUsername = process.env.ADMIN_USERNAME || '开发者账号';
-  const adminEmail = process.env.ADMIN_EMAIL || 'dev@example.com';
-  const adminPassword = process.env.ADMIN_DEFAULT_PASSWORD || '000000';
+  // 1. Ensure default developer account exists
+  // We hardcode 'developer' to ensure cross-environment consistency
+  const adminUsername = 'developer';
+  const adminPassword = '000000';
+  // Check by username only
+  const existingAdmin = await prisma.user.findUnique({
+    where: { username: adminUsername }
+  });
 
-  const existingAdmin = await prisma.user.findFirst({ where: { username: adminUsername } });
   if (!existingAdmin) {
     const passwordHash = await bcrypt.hash(adminPassword, 10);
     await prisma.user.create({
       data: {
         username: adminUsername,
-        email: adminEmail,
         password: passwordHash,
-        nickname: adminUsername,
+        nickname: '系统管理员',
         status: 'active',
       },
     });
     console.log(`✓ Default developer account created: ${adminUsername} / ${adminPassword}`);
   } else {
-    console.log(`✓ Default developer account already exists: ${adminUsername}`);
+    const passwordHash = await bcrypt.hash(adminPassword, 10);
+    await prisma.user.update({
+      where: { id: existingAdmin.id },
+      data: {
+        username: adminUsername,
+        password: passwordHash,
+        nickname: '系统管理员',
+        status: 'active'
+      }
+    });
+    console.log(`✓ Default developer account synced/verified: ${adminUsername} (ID: ${existingAdmin.id})`);
   }
 
   // 2. Create sample test users
   const testUsers = [
-    { username: 'testuser1', email: 'testuser1@example.com', password: 'Test1234!', nickname: 'Test User 1' },
-    { username: 'testuser2', email: 'testuser2@example.com', password: 'Test1234!', nickname: 'Test User 2' },
-    { username: 'testuser3', email: 'testuser3@example.com', password: 'Test1234!', nickname: 'Test User 3' },
-    { username: 'demo_player', email: 'demo@example.com', password: 'demo123', nickname: 'Demo Player' },
+    { username: 'testuser1', password: 'Test1234!', nickname: 'Test User 1' },
+    { username: 'testuser2', password: 'Test1234!', nickname: 'Test User 2' },
+    { username: 'testuser3', password: 'Test1234!', nickname: 'Test User 3' },
+    { username: 'demo_player', password: 'demo123', nickname: 'Demo Player' },
   ];
 
   let createdUsers = 0;
@@ -51,7 +63,6 @@ async function main() {
       await prisma.user.create({
         data: {
           username: userData.username,
-          email: userData.email,
           password: passwordHash,
           nickname: userData.nickname,
           status: 'active',
@@ -66,7 +77,7 @@ async function main() {
   const allUsers = await prisma.user.findMany({ take: 5 });
   if (allUsers.length > 0) {
     const hostUser = allUsers[0];
-    
+
     // Create a few sample rooms
     const sampleRooms = [
       { name: 'Welcome Room', maxPlayers: 4, status: 'waiting' as const },
@@ -76,10 +87,10 @@ async function main() {
 
     let createdRooms = 0;
     for (const roomData of sampleRooms) {
-      const existing = await prisma.room.findFirst({ 
-        where: { name: roomData.name, creatorId: hostUser.id } 
+      const existing = await prisma.room.findFirst({
+        where: { name: roomData.name, creatorId: hostUser.id }
       });
-      
+
       if (!existing) {
         const room = await prisma.room.create({
           data: {
@@ -107,6 +118,91 @@ async function main() {
       }
     }
     console.log(`✓ Created ${createdRooms} sample rooms (${sampleRooms.length - createdRooms} already existed)`);
+
+    // 4. Create sample HostConfig for the first room
+    const firstRoom = await prisma.room.findFirst({ where: { name: 'Welcome Room' } });
+    if (firstRoom) {
+      // 4a. Create GameSession first (Tasks depend on it via FK)
+      let session = await prisma.gameSession.findUnique({ where: { roomId: firstRoom.id } });
+      if (!session) {
+        session = await prisma.gameSession.create({
+          data: {
+            roomId: firstRoom.id,
+            currentRound: 1,
+            status: 'playing',
+          }
+        });
+        console.log(`✓ Created GameSession for "${firstRoom.name}"`);
+      }
+
+      // 4b. HostConfig
+      const existingConfig = await prisma.hostConfig.findUnique({ where: { roomId: firstRoom.id } });
+      if (!existingConfig) {
+        await prisma.hostConfig.create({
+          data: {
+            roomId: firstRoom.id,
+            createdBy: firstRoom.hostId,
+            apiProvider: 'openai',
+            apiEndpoint: 'https://api.openai.com/v1/chat/completions',
+            apiHeaders: { Authorization: 'Bearer sk-YOUR-KEY-HERE' },
+            apiConfig: { provider: 'openai' },
+            apiBodyTemplate: {
+              model: 'gpt-3.5-turbo',
+              temperature: 0.7,
+              messages: [
+                { role: 'system', content: '你是一个专业的文字交互游戏主持人。' }
+              ]
+            },
+            gameRules: `# 末日生存：废土之王\n\n**背景**：2050年，资源枯竭。\n**规则**：\n1. 每回合提交一项决策。\n2. 决策影响生命值、食物和金钱。\n3. 支持玩家间交易。`,
+            totalDecisionEntities: 4,
+            humanPlayerCount: 1,
+            aiPlayerCount: 3,
+            decisionTimeLimit: 120,
+            timeoutStrategy: 'auto_submit',
+            initializationCompleted: true,
+          }
+        });
+        console.log(`✓ Created sample game configuration for "${firstRoom.name}"`);
+
+        // 5. Create some sample tasks (Now FK is valid)
+        const sampleTasks = [
+          { title: '资源收集者', description: '在本局游戏中收集100个单位的食物', taskType: 'main', difficulty: 'normal' },
+          { title: '和平主义者', description: '连续3回合不发起任何冲突', taskType: 'challenge', difficulty: 'hard' }
+        ];
+
+        for (const tData of sampleTasks) {
+          await prisma.task.create({
+            data: {
+              sessionId: session.id, // Correct FK
+              title: tData.title,
+              description: tData.description,
+              taskType: tData.taskType,
+              difficulty: tData.difficulty,
+              requirements: { target: 100 },
+              createdBy: hostUser.id,
+              status: 'active',
+              progress: {}
+            }
+          });
+        }
+        console.log(`✓ Created sample tasks`);
+      }
+
+      // 6. Create sample strategy for test user
+      await prisma.strategy.create({
+        data: {
+          userId: hostUser.id,
+          strategyName: '防御均衡流',
+          description: '优先保障食物储备，次要发展防御体系。',
+          strategyData: { preference: 'defense', aggressiveness: 0.2 },
+          winRate: 0.75,
+          averageScore: 850,
+          totalGames: 12,
+          totalWins: 9,
+        }
+      });
+      console.log(`✓ Created sample strategy for user`);
+    }
   }
 
   console.log('\n✅ Database seeding completed!');

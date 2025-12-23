@@ -24,7 +24,6 @@ const router = express.Router();
 // Validation schemas
 const registerSchema = z.object({
   username: z.string().min(3).max(50),
-  email: z.string().email(),
   password: z.string().min(6).max(100),
 });
 
@@ -33,14 +32,7 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
-const forgotPasswordSchema = z.object({
-  email: z.string().email(),
-});
-
-const resetPasswordSchema = z.object({
-  token: z.string().min(1),
-  password: z.string().min(6).max(100),
-});
+// Email password recovery schemas removed
 
 // Helper function to generate JWT token
 const generateToken = (userId: string, username: string): string => {
@@ -65,17 +57,15 @@ const generateToken = (userId: string, username: string): string => {
 router.post('/register', async (req, res, next) => {
   try {
     const validatedData = registerSchema.parse(req.body);
-    const { username, email, password } = validatedData;
+    const { username, password } = validatedData;
 
     // Check if user already exists
-    const existingUser = await prisma.user.findFirst({
-      where: {
-        OR: [{ username }, { email }],
-      },
+    const existingUser = await prisma.user.findUnique({
+      where: { username },
     });
 
     if (existingUser) {
-      throw new AppErrorClass('Username or email already exists', 400);
+      throw new AppErrorClass('Username already exists', 400);
     }
 
     // Hash password
@@ -85,7 +75,6 @@ router.post('/register', async (req, res, next) => {
     const user = await prisma.user.create({
       data: {
         username,
-        email,
         password: passwordHash,
         nickname: username,
         status: 'active',
@@ -93,7 +82,6 @@ router.post('/register', async (req, res, next) => {
       select: {
         id: true,
         username: true,
-        email: true,
         nickname: true,
         avatarUrl: true,
         level: true,
@@ -134,11 +122,9 @@ router.post('/login', async (req, res, next) => {
     const validatedData = loginSchema.parse(req.body);
     const { username, password } = validatedData;
 
-    // Find user by username or email
-    const user = await prisma.user.findFirst({
-      where: {
-        OR: [{ username }, { email: username }],
-      },
+    // Find user by username
+    const user = await prisma.user.findUnique({
+      where: { username },
     });
 
     if (!user) {
@@ -174,7 +160,6 @@ router.post('/login', async (req, res, next) => {
         user: {
           id: user.id,
           username: user.username,
-          email: user.email,
           nickname: user.nickname,
           avatarUrl: user.avatarUrl,
           level: user.level,
@@ -192,112 +177,7 @@ router.post('/login', async (req, res, next) => {
   }
 });
 
-/**
- * POST /api/auth/forgot-password
- * Request password reset
- */
-router.post('/forgot-password', async (req, res, next) => {
-  try {
-    const validatedData = forgotPasswordSchema.parse(req.body);
-    const { email } = validatedData;
-
-    // Find user by email
-    const user = await prisma.user.findUnique({
-      where: { email },
-    });
-
-    // Always return success to prevent email enumeration
-    if (!user) {
-      logger.warn(`Password reset requested for non-existent email: ${email}`);
-      return res.json({
-        code: 200,
-        message: 'If the email exists, a password reset link has been sent',
-      });
-    }
-
-    // Generate reset token (in production, use crypto.randomBytes or similar)
-    const resetToken = jwt.sign(
-      { userId: user.id, type: 'password-reset' },
-      process.env.JWT_SECRET || 'secret',
-      { expiresIn: '1h' }
-    );
-
-    // TODO: Send email with reset link
-    // In production, implement email service here
-    logger.info(`Password reset token generated for: ${email} (token: ${resetToken})`);
-
-    return res.json({
-      code: 200,
-      message: 'If the email exists, a password reset link has been sent',
-      // In development, return token for testing
-      ...(process.env.NODE_ENV === 'development' && { resetToken }),
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return next(new AppErrorClass('Invalid input data', 400));
-    } else {
-      return next(error);
-    }
-  }
-});
-
-/**
- * POST /api/auth/reset-password
- * Reset password with token
- */
-router.post('/reset-password', async (req, res, next) => {
-  try {
-    const validatedData = resetPasswordSchema.parse(req.body);
-    const { token, password } = validatedData;
-
-    const jwtSecret = process.env.JWT_SECRET;
-    if (!jwtSecret) {
-      throw new AppErrorClass('JWT secret not configured', 500);
-    }
-
-    // Verify token
-    let decoded: any;
-    try {
-      decoded = jwt.verify(token, jwtSecret) as any;
-      if (decoded.type !== 'password-reset') {
-        throw new AppErrorClass('Invalid reset token', 400);
-      }
-    } catch (error) {
-      throw new AppErrorClass('Invalid or expired reset token', 400);
-    }
-
-    // Find user
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-    });
-
-    if (!user) {
-      throw new AppErrorClass('User not found', 404);
-    }
-
-    // Hash new password
-    const passwordHash = await bcrypt.hash(password, 10);
-
-    // Update password
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { password: passwordHash },
-    });
-
-    logger.info(`Password reset for user: ${user.username}`);
-
-    res.json({
-      code: 200,
-      message: 'Password reset successful',
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      next(new AppErrorClass('Invalid input data', 400));
-    } else {
-      next(error);
-    }
-  }
-});
+// Forgot/Reset password endpoints removed
 
 /**
  * POST /api/auth/refresh

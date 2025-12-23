@@ -44,7 +44,6 @@ const upload = multer({
 // Validation schemas
 const updateUserInfoSchema = z.object({
   nickname: z.string().min(1).max(50).optional(),
-  email: z.string().email().optional(),
 });
 
 /**
@@ -60,7 +59,6 @@ router.get('/info', authenticateToken, async (req: AuthRequest, res, next) => {
       select: {
         id: true,
         username: true,
-        email: true,
         nickname: true,
         avatarUrl: true,
         level: true,
@@ -93,19 +91,7 @@ router.put('/info', authenticateToken, async (req: AuthRequest, res, next) => {
     const userId = req.userId!;
     const validatedData = updateUserInfoSchema.parse(req.body);
 
-    // Check if email is already taken by another user
-    if (validatedData.email) {
-      const existingUser = await prisma.user.findFirst({
-        where: {
-          email: validatedData.email,
-          NOT: { id: userId },
-        },
-      });
-
-      if (existingUser) {
-        throw new AppErrorClass('Email already taken', 400);
-      }
-    }
+    // Email update logic removed
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
@@ -113,7 +99,6 @@ router.put('/info', authenticateToken, async (req: AuthRequest, res, next) => {
       select: {
         id: true,
         username: true,
-        email: true,
         nickname: true,
         avatarUrl: true,
         level: true,
@@ -179,7 +164,6 @@ router.post('/avatar', authenticateToken, upload.single('avatar'), async (req: A
       select: {
         id: true,
         username: true,
-        email: true,
         nickname: true,
         avatarUrl: true,
         level: true,

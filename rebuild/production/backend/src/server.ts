@@ -17,24 +17,58 @@ dotenv.config();
 
 const app = express();
 const httpServer = createServer(app);
-const io = new Server(httpServer, {
-  cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-    credentials: true,
+
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  process.env.FRONTEND_URL,
+].filter(Boolean) as string[];
+
+const corsOptions: cors.CorsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+
+    // 局域网识别
+    if (process.env.NODE_ENV !== 'production' &&
+      (origin.includes('192.168.') || origin.includes('10.') || origin.includes('172.') || origin.includes('localhost'))) {
+      return callback(null, true);
+    }
+
+    if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
+      callback(null, true);
+    } else {
+      if (process.env.NODE_ENV !== 'production') {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    }
   },
+  credentials: true,
+};
+
+const io = new Server(httpServer, {
+  cors: corsOptions,
 });
 
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: false, // 演示环境下关闭 CSP 以减少兼容性问题
+}));
 app.use(compression());
-app.use(
-  cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-    credentials: true,
-  })
-);
+app.use(cors(corsOptions));
+
+// Update Socket.io CORS as well
+io.engine.on("headers", (headers, req) => {
+  const origin = req.headers.origin;
+  if (origin && (origin.includes('192.168.') || origin.includes('10.') || origin.includes('172.'))) {
+    headers["Access-Control-Allow-Origin"] = origin;
+    headers["Access-Control-Allow-Credentials"] = "true";
+  }
+});
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static('uploads')); // Serve uploaded files
@@ -57,11 +91,17 @@ import authRoutes from './routes/auth';
 import userRoutes from './routes/user';
 import roomRoutes from './routes/rooms';
 import gameRoutes from './routes/game';
+import tradeRoutes from './routes/trade';
+import taskRoutes from './routes/tasks';
+import strategyRoutes from './routes/strategies';
 import adminRoutes from './routes/admin';
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
+app.use('/api/user', strategyRoutes);
 app.use('/api/rooms', roomRoutes);
 app.use('/api/game', gameRoutes);
+app.use('/api/game', tradeRoutes);
+app.use('/api/game', taskRoutes);
 app.use('/api/admin', adminRoutes);
 
 // Error handling
@@ -73,26 +113,19 @@ initSocketServer(io);
 // Ensure default developer account exists
 const ensureDefaultAdmin = async () => {
   try {
-    const username = process.env.ADMIN_USERNAME || '开发者账号';
-    const email = process.env.ADMIN_EMAIL || 'dev@example.com';
+    const username = process.env.ADMIN_USERNAME || 'developer';
     const password = process.env.ADMIN_DEFAULT_PASSWORD || '000000';
 
-    // Check if user exists by username OR email (since both have unique constraints)
-    const existing = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { username },
-          { email },
-        ],
-      },
+    // Check if user exists by username
+    const existing = await prisma.user.findUnique({
+      where: { username },
     });
-    
+
     if (!existing) {
       const passwordHash = await bcrypt.hash(password, 10);
       await prisma.user.create({
         data: {
           username,
-          email,
           password: passwordHash,
           nickname: username,
           status: 'active',

@@ -75,14 +75,45 @@ function Rooms() {
       }
     };
 
-    wsService.on('player_joined', refresh);
-    wsService.on('player_left', refresh);
+    // 问题4修复：监听房间人数变化事件，实时更新
+    const handlePlayerJoined = (payload: unknown) => {
+      if (payload && typeof payload === 'object' && 'roomId' in payload) {
+        const roomId = (payload as { roomId: string }).roomId;
+        // 更新对应房间的人数
+        setRooms(prevRooms =>
+          prevRooms.map(room =>
+            room.id === roomId
+              ? { ...room, currentPlayers: Math.min(room.currentPlayers + 1, room.maxPlayers) }
+              : room
+          )
+        );
+      }
+      refresh(); // 也刷新完整列表以确保数据同步
+    };
+
+    const handlePlayerLeft = (payload: unknown) => {
+      if (payload && typeof payload === 'object' && 'roomId' in payload) {
+        const roomId = (payload as { roomId: string }).roomId;
+        // 更新对应房间的人数
+        setRooms(prevRooms =>
+          prevRooms.map(room =>
+            room.id === roomId
+              ? { ...room, currentPlayers: Math.max(room.currentPlayers - 1, 0) }
+              : room
+          )
+        );
+      }
+      refresh(); // 也刷新完整列表以确保数据同步
+    };
+
+    wsService.on('player_joined', handlePlayerJoined);
+    wsService.on('player_left', handlePlayerLeft);
     wsService.on('system_message', handleSystemMessage);
     wsService.on('error', handleError);
 
     return () => {
-      wsService.off('player_joined', refresh);
-      wsService.off('player_left', refresh);
+      wsService.off('player_joined', handlePlayerJoined);
+      wsService.off('player_left', handlePlayerLeft);
       wsService.off('system_message', handleSystemMessage);
       wsService.off('error', handleError);
     };

@@ -2,13 +2,21 @@ import express from 'express';
 import prisma from '../utils/db';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
+import { logger } from '../utils/logger';
 
 const router = express.Router();
 
 // 简单的开发者校验：通过环境变量或硬编码的管理员用户名
+// 支持多个开发者用户名（兼容性）
 const isAdminUser = (req: AuthRequest) => {
   const adminUsername = process.env.ADMIN_USERNAME || '开发者账号';
-  return req.username === adminUsername;
+  // 支持多个开发者用户名：环境变量指定的、默认的"开发者账号"、以及"developer"
+  const adminUsernames = [
+    adminUsername,
+    '开发者账号',
+    'developer',
+  ];
+  return req.username ? adminUsernames.includes(req.username) : false;
 };
 
 const requireAdmin = (req: AuthRequest) => {
@@ -43,7 +51,6 @@ router.get('/users', authenticateToken, async (req: AuthRequest, res, next) => {
         select: {
           id: true,
           username: true,
-          email: true,
           nickname: true,
           status: true,
           createdAt: true,
@@ -70,7 +77,6 @@ router.get('/users', authenticateToken, async (req: AuthRequest, res, next) => {
       return {
         id: u.id,
         username: u.username,
-        email: u.email,
         nickname: u.nickname,
         status: u.status,
         createdAt: u.createdAt,
@@ -79,10 +85,10 @@ router.get('/users', authenticateToken, async (req: AuthRequest, res, next) => {
         online: !!u.lastLoginAt,
         room: activeRoom
           ? {
-              id: activeRoom.id,
-              name: activeRoom.name,
-              status: activeRoom.status,
-            }
+            id: activeRoom.id,
+            name: activeRoom.name,
+            status: activeRoom.status,
+          }
           : null,
       };
     });
@@ -165,9 +171,82 @@ router.delete('/users/:userId', authenticateToken, async (req: AuthRequest, res,
       throw new AppError('Cannot delete the currently logged-in developer account', 400);
     }
 
-    // TODO: 若后续需要严格限制（存在重要关联时禁止删除），可在这里增加检查
-    await prisma.user.delete({
+    // 检查用户是否存在
+    const user = await prisma.user.findUnique({
       where: { id: userId },
+      select: { id: true, username: true },
+    });
+
+    if (!user) {
+      throw new AppError('用户不存在', 404);
+    }
+
+    // 使用事务处理删除，确保数据一致性
+    // 注意：必须按照正确的顺序删除，避免外键约束冲突
+    await prisma.$transaction(async (tx) => {
+      // 1. 先删除该用户创建的临时事件（TemporaryEvent）
+      //    这些事件可能关联到游戏会话，需要先删除
+      await tx.temporaryEvent.deleteMany({
+        where: { createdBy: userId },
+      });
+
+      // 2. 删除该用户的游戏操作记录（PlayerAction）
+      //    这些操作关联到游戏会话和用户
+      await tx.playerAction.deleteMany({
+        where: { userId },
+      });
+
+      // 3. 删除该用户创建的主机配置（HostConfig）
+      //    主机配置关联到房间，需要先删除
+      await tx.hostConfig.deleteMany({
+        where: { createdBy: userId },
+      });
+
+      // 4. 删除该用户在其他房间的参与记录（RoomPlayer）
+      //    必须在删除房间之前删除，因为房间删除会级联删除 RoomPlayer
+      await tx.roomPlayer.deleteMany({
+        where: { userId },
+      });
+
+      // 5. 处理该用户作为 host 但不是 creator 的房间
+      //    需要先转移 hostId 或删除房间
+      const roomsAsHost = await tx.room.findMany({
+        where: {
+          hostId: userId,
+          creatorId: { not: userId }, // 只处理不是创建者的房间
+        },
+        select: { id: true },
+      });
+
+      if (roomsAsHost.length > 0) {
+        // 选项1: 将 hostId 转移给 creator（如果 creator 存在）
+        // 选项2: 直接删除这些房间
+        // 这里选择删除房间，因为 host 被删除后房间应该关闭
+        await tx.room.deleteMany({
+          where: {
+            hostId: userId,
+            creatorId: { not: userId },
+          },
+        });
+      }
+
+      // 6. 删除该用户创建或拥有的所有房间
+      //    这会级联删除 RoomPlayer, HostConfig, GameSession 等
+      await tx.room.deleteMany({
+        where: {
+          OR: [
+            { creatorId: userId },
+            { hostId: userId },
+          ],
+        },
+      });
+
+      // 7. 最后删除用户本身
+      await tx.user.delete({
+        where: { id: userId },
+      });
+    }, {
+      timeout: 30000, // 30秒超时，防止长时间锁定
     });
 
     res.json({
@@ -175,7 +254,37 @@ router.delete('/users/:userId', authenticateToken, async (req: AuthRequest, res,
       message: '用户已删除',
       data: { id: userId },
     });
-  } catch (error) {
+  } catch (error: any) {
+    const userIdToLog = req.params.userId || 'unknown';
+    // 改进错误处理，提供更详细的错误信息
+    if (error.code === 'P2003') {
+      // Prisma 外键约束错误
+      logger.error(`删除用户失败 - 外键约束违反: ${error.meta?.field_name || 'unknown'}`, {
+        userId: userIdToLog,
+        error: error.message,
+        meta: error.meta,
+      });
+      throw new AppError(
+        `删除用户失败：存在关联数据。请先处理该用户创建的房间和相关数据。`,
+        400,
+        'FOREIGN_KEY_CONSTRAINT'
+      );
+    } else if (error.code === 'P2025') {
+      // Prisma 记录不存在错误
+      logger.error(`删除用户失败 - 记录不存在: ${userIdToLog}`, {
+        userId: userIdToLog,
+        error: error.message,
+      });
+      throw new AppError('用户不存在或已被删除', 404, 'RECORD_NOT_FOUND');
+    } else {
+      // 其他错误
+      logger.error(`删除用户失败: ${error.message}`, {
+        userId: userIdToLog,
+        error: error.message,
+        stack: error.stack,
+        code: error.code,
+      });
+    }
     next(error);
   }
 });

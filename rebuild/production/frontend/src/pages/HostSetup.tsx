@@ -14,6 +14,7 @@ import {
   Divider,
 } from 'antd';
 import { hostConfigAPI, HostConfig } from '../services/rooms';
+import { gameAPI } from '../services/game';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -176,6 +177,20 @@ function HostSetup() {
     }
   };
 
+  const handleStartGame = async () => {
+    if (!roomId) return;
+    setSaving(true);
+    try {
+      const session = await gameAPI.startGame(roomId);
+      message.success('游戏已开始！');
+      navigate(`/game/${session.sessionId}`);
+    } catch (error) {
+      message.error((error as Error).message || '开始游戏失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <Space direction="vertical" size="large" style={{ width: '100%', padding: 24 }}>
       <Space align="center">
@@ -293,6 +308,16 @@ function HostSetup() {
             >
               完成配置
             </Button>
+            {config?.initializationCompleted && (
+              <Button
+                type="primary"
+                danger
+                onClick={handleStartGame}
+                loading={saving}
+              >
+                开始游戏
+              </Button>
+            )}
           </Space>
           {config?.configurationCompletedAt && (
             <Text type="secondary">

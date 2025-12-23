@@ -14,7 +14,7 @@ const parsePositiveInt = (value: any, fallback: number) => {
   return Math.floor(n);
 };
 
-const ensureRoomHost = async (roomId: string, userId: string) => {
+export const ensureRoomHost = async (roomId: string, userId: string) => {
   const room = await prisma.room.findUnique({ where: { id: roomId } });
   if (!room) {
     throw new AppError('房间不存在', 404);
@@ -132,8 +132,9 @@ router.post('/create', authenticateToken, async (req: AuthRequest, res, next) =>
  * GET /api/rooms/list
  * 获取房间列表
  */
-router.get('/list', async (req, res, next) => {
+router.get('/list', authenticateToken, async (req: AuthRequest, res, next) => {
   try {
+    const userId = req.userId; // 获取当前用户ID，用于判断是否在房间中
     const page = parsePositiveInt(req.query.page, 1);
     const limit = parsePositiveInt(req.query.limit, 20);
     const status = req.query.status as string | undefined;
@@ -172,11 +173,32 @@ router.get('/list', async (req, res, next) => {
       prisma.room.count({ where }),
     ]);
 
+    // 获取用户在所有房间中的参与状态
+    const roomIds = rooms.map(r => r.id);
+    const userMemberships = userId
+      ? await prisma.roomPlayer.findMany({
+        where: {
+          roomId: { in: roomIds },
+          userId,
+          status: { not: 'left' },
+        },
+        select: {
+          roomId: true,
+          status: true,
+        },
+      })
+      : [];
+
+    const membershipMap = new Map(
+      userMemberships.map(m => [m.roomId, m.status])
+    );
+
     const withHostName = rooms.map(room => {
       const { host, ...rest } = room;
       return {
         ...rest,
         hostName: host?.nickname || host?.username || '',
+        isJoined: userId ? membershipMap.has(room.id) : false, // 问题2修复：返回用户是否在房间中
       };
     });
 
@@ -204,6 +226,11 @@ router.post('/:roomId/join', authenticateToken, async (req: AuthRequest, res, ne
     const room = await prisma.room.findUnique({ where: { id: roomId } });
     if (!room) throw new AppError('房间不存在', 404);
 
+    // 问题1修复：playing状态的房间不允许加入
+    if (room.status === 'playing') {
+      throw new AppError('游戏进行中的房间不允许加入', 403);
+    }
+
     if (room.password && room.password !== password) {
       throw new AppError('房间密码错误', 403);
     }
@@ -219,7 +246,8 @@ router.post('/:roomId/join', authenticateToken, async (req: AuthRequest, res, ne
     // If user is already in the room, return success without emitting event (idempotent operation)
     if (existing && existing.status !== 'left') {
       // User is already in room, just return success without emitting events
-      return res.json({ code: 200, message: '已在房间中' });
+      res.json({ code: 200, message: '已在房间中' });
+      return;
     }
 
     // User rejoining the room (was previously left) or new user
@@ -258,6 +286,7 @@ router.post('/:roomId/join', authenticateToken, async (req: AuthRequest, res, ne
     }
 
     res.json({ code: 200, message: '加入房间成功' });
+    return;
   } catch (error) {
     next(error);
   }
@@ -411,7 +440,7 @@ router.post('/:roomId/host-config', authenticateToken, async (req: AuthRequest, 
     const ai = Number(aiPlayerCount ?? 0);
     const timeLimit = Number(decisionTimeLimit ?? 4);
     if (total <= 0 || human < 0 || ai < 0) throw new AppError('人数配置不合法', 400);
-    if (human + ai !== total) throw new AppError('totalDecisionEntities 必须等于人类+AI数量', 400);
+    if (human + ai > total) throw new AppError('人类+AI数量不能超过总决策实体数', 400);
     if (timeLimit <= 0) throw new AppError('决策时限必须大于0', 400);
 
     const cfg = await getOrCreateHostConfig(roomId, userId);
@@ -543,8 +572,8 @@ router.post(
       const ai = Number(aiPlayerCount ?? 0);
       const timeLimit = Number(decisionTimeLimit ?? 4);
       if (total <= 0 || human < 0 || ai < 0) throw new AppError('人数配置不合法', 400);
-      if (human + ai !== total)
-        throw new AppError('totalDecisionEntities 必须等于人类+AI数量', 400);
+      if (human + ai > total)
+        throw new AppError('人类+AI数量不能超过总决策实体数', 400);
       if (timeLimit <= 0) throw new AppError('决策时限必须大于0', 400);
 
       const cfg = await getOrCreateHostConfig(roomId, userId);

@@ -20,12 +20,21 @@ interface RoomCardProps {
 export function RoomCard({ room, onJoin, onLeave, onClose, isHost, loading }: RoomCardProps) {
   const hostLabel = room.hostName || room.hostId || '未知房主';
   const isFull = room.currentPlayers >= room.maxPlayers;
+  const isPlaying = room.status === 'playing';
+  const isJoined = room.isJoined ?? false; // 问题2修复：检查用户是否在房间中
 
   return (
     <Card
       title={
-        <Space>
-          <Typography.Text strong>{room.name}</Typography.Text>
+        <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+          <Typography.Text 
+            strong 
+            ellipsis 
+            style={{ maxWidth: 180 }} 
+            title={room.name}
+          >
+            {room.name}
+          </Typography.Text>
           <Tag color={statusColor[room.status] || 'default'}>{room.status}</Tag>
         </Space>
       }
@@ -36,15 +45,18 @@ export function RoomCard({ room, onJoin, onLeave, onClose, isHost, loading }: Ro
           <Button
             type="primary"
             size="small"
-            disabled={isFull}
+            disabled={isFull || isPlaying} // 问题1修复：playing状态不能加入
             loading={loading}
             onClick={() => onJoin(room.id)}
           >
-            {isFull ? '已满' : '加入'}
+            {isPlaying ? '进行中' : isFull ? '已满' : '加入'}
           </Button>
-          <Button size="small" danger loading={loading} onClick={() => onLeave(room.id)}>
-            离开
-          </Button>
+          {/* 问题2修复：只有加入的房间才显示离开按钮 */}
+          {isJoined && (
+            <Button size="small" danger loading={loading} onClick={() => onLeave(room.id)}>
+              离开
+            </Button>
+          )}
           {isHost && onClose && (
             <Button
               size="small"

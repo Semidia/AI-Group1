@@ -13,12 +13,15 @@ $envExample = ".env.example"
 
 # 检查 .env 文件是否存在
 if (Test-Path $envFile) {
-    Write-Host "⚠ .env 文件已存在" -ForegroundColor Yellow
-    $overwrite = Read-Host "是否覆盖现有文件? (y/N)"
-    if ($overwrite -ne "y" -and $overwrite -ne "Y") {
-        Write-Host "已取消操作" -ForegroundColor Yellow
-        exit 0
-    }
+    Write-Host "✓ .env 文件已存在，跳过创建" -ForegroundColor Green
+    Write-Host ""
+    exit 0
+}
+
+# 如果 .env.example 存在，询问是否使用它作为模板
+if (Test-Path $envExample) {
+    Write-Host "✓ 找到 .env.example 模板文件" -ForegroundColor Green
+    Write-Host ""
 }
 
 # 检查 docker-compose.yml 是否存在
@@ -32,11 +35,22 @@ Write-Host ""
 Write-Host "正在创建 .env 文件..." -ForegroundColor Yellow
 
 # 生成 JWT Secret（随机字符串）
-$jwtSecret = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 32 | ForEach-Object {[char]$_})
-$jwtRefreshSecret = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 32 | ForEach-Object {[char]$_})
+$jwtSecret = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 32 | ForEach-Object { [char]$_ })
+$jwtRefreshSecret = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 32 | ForEach-Object { [char]$_ })
 
 # 创建 .env 文件内容
-$envContent = @"
+# 如果 .env.example 存在，先读取它作为模板
+if (Test-Path $envExample) {
+    Write-Host "从 .env.example 创建 .env 文件..." -ForegroundColor DarkGray
+    $envContent = Get-Content $envExample -Raw
+    
+    # 替换 JWT Secret（如果模板中有占位符）
+    $envContent = $envContent -replace 'JWT_SECRET="your-secret-key-change-this-in-production"', "JWT_SECRET=`"$jwtSecret`""
+    $envContent = $envContent -replace 'JWT_REFRESH_SECRET="your-refresh-secret-key-change-this-in-production"', "JWT_REFRESH_SECRET=`"$jwtRefreshSecret`""
+}
+else {
+    # 如果没有 .env.example，使用默认配置
+    $envContent = @"
 # 数据库配置
 DATABASE_URL="postgresql://game_user:game_password@localhost:5432/game_db?schema=public"
 
@@ -62,7 +76,12 @@ RESET_PASSWORD_TOKEN_EXPIRES_IN="1h"
 # 文件上传配置
 UPLOAD_DIR="./uploads"
 MAX_FILE_SIZE=5242880
+
+# 管理员账号配置（可选）
+ADMIN_USERNAME="developer"
+ADMIN_DEFAULT_PASSWORD="000000"
 "@
+}
 
 # 写入文件
 $envContent | Out-File -FilePath $envFile -Encoding utf8 -NoNewline
@@ -79,11 +98,13 @@ if ($useDocker) {
         $postgresRunning = docker ps --format "{{.Names}}" | Select-String "game-postgres"
         if ($postgresRunning) {
             Write-Host "✓ PostgreSQL 容器运行中" -ForegroundColor Green
-        } else {
+        }
+        else {
             Write-Host "⚠ PostgreSQL 容器存在但未运行" -ForegroundColor Yellow
             Write-Host "  启动命令: docker-compose up -d postgres" -ForegroundColor Gray
         }
-    } else {
+    }
+    else {
         Write-Host "⚠ PostgreSQL 容器不存在" -ForegroundColor Yellow
         Write-Host "  启动命令: docker-compose up -d postgres" -ForegroundColor Gray
     }
@@ -92,11 +113,13 @@ if ($useDocker) {
         $redisRunning = docker ps --format "{{.Names}}" | Select-String "game-redis"
         if ($redisRunning) {
             Write-Host "✓ Redis 容器运行中" -ForegroundColor Green
-        } else {
+        }
+        else {
             Write-Host "⚠ Redis 容器存在但未运行" -ForegroundColor Yellow
             Write-Host "  启动命令: docker-compose up -d redis" -ForegroundColor Gray
         }
-    } else {
+    }
+    else {
         Write-Host "⚠ Redis 容器不存在（可选）" -ForegroundColor Yellow
     }
 }

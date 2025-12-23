@@ -1,5 +1,5 @@
 import { Form, Input, Button, Card, message } from 'antd';
-import { UserOutlined, LockOutlined, MailOutlined } from '@ant-design/icons';
+import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate, Link } from 'react-router-dom';
 import { useState } from 'react';
 import { authAPI } from '../services/auth';
@@ -12,7 +12,6 @@ function Register() {
 
   const onFinish = async (values: {
     username: string;
-    email: string;
     password: string;
     confirmPassword: string;
   }) => {
@@ -58,12 +57,7 @@ function Register() {
             <Input prefix={<UserOutlined />} placeholder="用户名" />
           </Form.Item>
 
-          <Form.Item
-            name="email"
-            rules={[{ required: true, type: 'email', message: '请输入有效的邮箱!' }]}
-          >
-            <Input prefix={<MailOutlined />} placeholder="邮箱" />
-          </Form.Item>
+
 
           <Form.Item
             name="password"

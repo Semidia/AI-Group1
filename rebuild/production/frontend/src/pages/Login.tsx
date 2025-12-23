@@ -45,7 +45,7 @@ function Login() {
       <Card title="登录" style={{ width: 400 }}>
         <Form name="login" onFinish={onFinish} autoComplete="off">
           <Form.Item name="username" rules={[{ required: true, message: '请输入用户名!' }]}>
-            <Input prefix={<UserOutlined />} placeholder="用户名或邮箱" />
+            <Input prefix={<UserOutlined />} placeholder="用户名" />
           </Form.Item>
 
           <Form.Item name="password" rules={[{ required: true, message: '请输入密码!' }]}>
@@ -61,10 +61,6 @@ function Login() {
           <Form.Item>
             <div style={{ textAlign: 'center' }}>
               <Link to="/register">还没有账号？立即注册</Link>
-              <br />
-              <Link to="/forgot-password" style={{ marginTop: 8, display: 'block' }}>
-                忘记密码？
-              </Link>
             </div>
           </Form.Item>
         </Form>

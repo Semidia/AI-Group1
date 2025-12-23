@@ -9,6 +9,7 @@ export interface RoomSummary {
   hostId: string;
   hostName?: string;
   createdAt: string;
+  isJoined?: boolean; // 问题2修复：用户是否在房间中
 }
 
 export interface RoomListResult {

@@ -10,7 +10,8 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # 使用本地目录存储数据，方便项目迁移
+      - ./data/postgres:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U game_user -d game_db"]
       interval: 10s
@@ -23,14 +24,11 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - redis_data:/data
+      # 使用本地目录存储数据，方便项目迁移
+      - ./data/redis:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
-
-volumes:
-  postgres_data:
-  redis_data:
 

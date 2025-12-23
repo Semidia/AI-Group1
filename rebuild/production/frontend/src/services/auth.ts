@@ -2,7 +2,6 @@ import apiClient from './api';
 
 export interface RegisterData {
   username: string;
-  email: string;
   password: string;
 }
 
@@ -14,7 +13,6 @@ export interface LoginData {
 export interface User {
   id: string;
   username: string;
-  email: string;
   nickname?: string;
   avatarUrl?: string;
   level: number;
@@ -39,13 +37,6 @@ export const authAPI = {
     return response.data;
   },
 
-  forgotPassword: async (email: string): Promise<void> => {
-    await apiClient.post('/auth/forgot-password', { email });
-  },
-
-  resetPassword: async (token: string, password: string): Promise<void> => {
-    await apiClient.post('/auth/reset-password', { token, password });
-  },
 
   refreshToken: async (): Promise<{ token: string }> => {
     const response = await apiClient.post('/auth/refresh');
@@ -59,7 +50,7 @@ export const userAPI = {
     return response.data;
   },
 
-  updateUserInfo: async (data: { nickname?: string; email?: string }): Promise<User> => {
+  updateUserInfo: async (data: { nickname?: string }): Promise<User> => {
     const response = await apiClient.put('/user/info', data);
     return response.data;
   },

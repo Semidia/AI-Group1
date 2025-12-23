@@ -13,9 +13,11 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "check:db": "tsx scripts/check-db.ts",
-    "seed": "tsx scripts/seed.ts",
-    "delete-admin": "tsx scripts/delete-admin.ts",
+    "check:db": "npx tsx scripts/check-db.ts",
+    "check:developer": "npx tsx scripts/check-developer.ts",
+    "cleanup:db": "npx tsx scripts/cleanup-database.ts",
+    "seed": "npx tsx scripts/seed.ts",
+    "delete-admin": "npx tsx scripts/delete-admin.ts",
     "test": "jest",
     "test:watch": "jest --watch"
   },
@@ -27,7 +29,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@prisma/client": "^5.7.1",
+    "@prisma/client": "5.22.0",
     "@types/multer": "^2.0.0",
     "axios": "^1.6.2",
     "bcrypt": "^5.1.1",
@@ -59,7 +61,7 @@
     "eslint-plugin-prettier": "^5.1.2",
     "jest": "^29.7.0",
     "prettier": "^3.1.1",
-    "prisma": "^5.7.1",
+    "prisma": "5.22.0",
     "ts-jest": "^29.1.1",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3"
