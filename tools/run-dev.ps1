@@ -5,21 +5,70 @@
 
 param()
 
-$ErrorActionPreference = "Continue"
+$ErrorActionPreference = "Stop"
 
-# 路径计算
-$ScriptPath = $MyInvocation.MyCommand.Definition
-$ToolsDir = [System.IO.Path]::GetDirectoryName($ScriptPath)
-$RootDir = [System.IO.Path]::GetDirectoryName($ToolsDir)
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "DEV LAUNCHER: backend + frontend" -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host ""
+
+# Locate backend/frontend directories
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$RootDir = Split-Path -Parent $ScriptDir
 $BackendPath = Join-Path $RootDir "rebuild\production\backend"
 $FrontendPath = Join-Path $RootDir "rebuild\production\frontend"
 
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "AI-Group1 环境自动清理与自检" -ForegroundColor Cyan
-Write-Host "========================================" -ForegroundColor Cyan
+if (-not (Test-Path $BackendPath) -or -not (Test-Path $FrontendPath)) {
+    Write-Host "ERROR: backend or frontend folder not found." -ForegroundColor Red
+    Write-Host "Expected paths:" -ForegroundColor Red
+    Write-Host "  Backend:  $BackendPath" -ForegroundColor Red
+    Write-Host "  Frontend: $FrontendPath" -ForegroundColor Red
+    exit 1
+}
 
-### 🚨 暴力清理：强行干掉冲突进程
-Write-Host "-> 正在强制释放端口 3000, 5173 并清理残留进程..." -ForegroundColor Yellow
+Write-Host "Script directory : $ScriptDir" -ForegroundColor DarkGray
+Write-Host "Backend directory: $BackendPath" -ForegroundColor DarkGray
+Write-Host "Frontend directory: $FrontendPath" -ForegroundColor DarkGray
+Write-Host ""
+
+function Test-CommandExists {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name
+    )
+    return [bool](Get-Command $Name -ErrorAction SilentlyContinue)
+}
+
+function Invoke-InDirectory {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+        [Parameter(Mandatory = $true)]
+        [scriptblock]$ScriptBlock
+    )
+
+    Push-Location $Path
+    try {
+        & $ScriptBlock
+    }
+    finally {
+        Pop-Location
+    }
+}
+
+### 1. Check Node.js
+Write-Host "[1/7] Checking Node.js..." -ForegroundColor Yellow
+if (-not (Test-CommandExists -Name "node")) {
+    Write-Host "ERROR: Node.js not found. Please install Node.js (>= 18)." -ForegroundColor Red
+    exit 1
+} else {
+    $nodeVersion = node -v
+    Write-Host "Node.js version: $nodeVersion" -ForegroundColor Green
+}
+Write-Host ""
+
+### 2. Force cleanup: Kill conflicting processes
+Write-Host "[2/7] Force releasing ports 3000, 5173 and cleaning up residual processes..." -ForegroundColor Yellow
 
 $conflictPorts = @(3000, 5173)
 foreach ($port in $conflictPorts) {
@@ -27,68 +76,241 @@ foreach ($port in $conflictPorts) {
     if ($processes) {
         foreach ($procId in $processes) {
             Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
-            Write-Host "   [✓] 已释放端口 $port (PID: $procId)" -ForegroundColor Gray
+            Write-Host "   [OK] Port $port released (PID: $procId)" -ForegroundColor Gray
         }
     }
 }
 
-# 强杀 node / tsx 进程（仅针对当前用户，避免误杀系统级进程）
+# Force kill node/tsx processes (only for current user, avoid killing system-level processes)
 Stop-Process -Name "node", "tsx" -Force -ErrorAction SilentlyContinue 2>$null
-Write-Host "   [✓] 已清理残留 Node 运行时状态" -ForegroundColor Gray
-Start-Sleep -Seconds 1 # 给系统一点反应时间来释放文件锁
+Write-Host "   [OK] Cleaned up residual Node runtime state" -ForegroundColor Gray
+Start-Sleep -Seconds 1
+Write-Host ""
 
-function Invoke-InDirectory {
-    param([string]$Path, [scriptblock]$ScriptBlock)
-    Push-Location $Path
-    try { & $ScriptBlock } finally { Pop-Location }
+### 3. Start Docker services (Postgres + Redis) if possible
+Write-Host "[3/7] Starting Docker services (if available)..." -ForegroundColor Yellow
+if (Test-Path (Join-Path $BackendPath "docker-compose.yml")) {
+    if (-not (Test-CommandExists -Name "docker")) {
+        Write-Host "Docker not found. Please make sure DB and Redis are running manually." -ForegroundColor Yellow
+    } else {
+        Invoke-InDirectory -Path $BackendPath -ScriptBlock {
+            $composeCmd = $null
+
+            & docker compose version *> $null
+            if ($LASTEXITCODE -eq 0) {
+                $composeCmd = "docker compose"
+            } elseif (Get-Command "docker-compose" -ErrorAction SilentlyContinue) {
+                $composeCmd = "docker-compose"
+            }
+
+            if (-not $composeCmd) {
+                Write-Host "Cannot find 'docker compose' or 'docker-compose'. Please start DB/Redis manually." -ForegroundColor Yellow
+            } else {
+                Write-Host "Running: $composeCmd up -d" -ForegroundColor DarkGray
+                iex "$composeCmd up -d"
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Host "Docker containers started (Postgres + Redis)." -ForegroundColor Green
+                    
+                    # Wait for PostgreSQL to be ready
+                    Write-Host "Waiting for PostgreSQL to be ready..." -ForegroundColor Cyan
+                    $maxWait = 30
+                    $waited = 0
+                    $ready = $false
+                    
+                    while ($waited -lt $maxWait -and -not $ready) {
+                        Start-Sleep -Seconds 1
+                        $waited++
+                        
+                        # Check if container is running
+                        $containerRunning = docker ps --format "{{.Names}}" | Select-String "game-postgres"
+                        if ($containerRunning) {
+                            # Try to connect to database with correct credentials
+                            $result = docker exec game-postgres pg_isready -U game_user -d game_db 2>&1
+                            if ($LASTEXITCODE -eq 0) {
+                                # Also test actual connection with psql
+                                $testResult = docker exec game-postgres psql -U game_user -d game_db -c "SELECT 1;" 2>&1
+                                if ($LASTEXITCODE -eq 0) {
+                                    $ready = $true
+                                    Write-Host "PostgreSQL is ready and accepting connections!" -ForegroundColor Green
+                                }
+                            }
+                        }
+                        
+                        if (-not $ready -and $waited % 5 -eq 0) {
+                            Write-Host "Waiting for database... ($waited/$maxWait seconds)" -ForegroundColor DarkGray
+                        }
+                    }
+                    
+                    if (-not $ready) {
+                        Write-Host "WARNING: Database may not be fully ready yet." -ForegroundColor Yellow
+                        Write-Host "If you see authentication errors, try:" -ForegroundColor Yellow
+                        Write-Host "  1. Stop and remove the container: docker-compose down" -ForegroundColor Gray
+                        Write-Host "  2. Remove the data volume: Remove-Item -Recurse -Force .\data\postgres" -ForegroundColor Gray
+                        Write-Host "  3. Restart: docker-compose up -d postgres" -ForegroundColor Gray
+                    }
+                } else {
+                    Write-Host "WARNING: Docker containers may not have started correctly, please check docker-compose output." -ForegroundColor Yellow
+                }
+            }
+        }
+    }
+} else {
+    Write-Host "backend/docker-compose.yml not found, skip Docker step." -ForegroundColor Yellow
 }
+Write-Host ""
 
-### 1. 后端自检
-Write-Host "[1/2] 正在准备后端环境..." -ForegroundColor Yellow
+### 4. Backend env + dependencies + migrations
+Write-Host "[4/7] Backend env / deps / migrations..." -ForegroundColor Yellow
 
 Invoke-InDirectory -Path $BackendPath -ScriptBlock {
-    # 自动生成 .env
-    if (-not (Test-Path ".env")) {
-        $setup = Join-Path (Get-Location) "scripts\setup-env.ps1"
-        if (Test-Path $setup) {
-            powershell -ExecutionPolicy Bypass -File $setup
+    # 4.1 Ensure .env exists and is valid
+    $envFile = Join-Path (Get-Location) ".env"
+    $needsRegeneration = $false
+    
+    if (Test-Path $envFile) {
+        # Validate .env file format
+        try {
+            $envContent = Get-Content $envFile -Raw -ErrorAction Stop
+            # Check for common formatting issues
+            if ($envContent -match '\\"[^"]*$' -or $envContent -match '[^=]"[^=]*"[^=]' -or $envContent -match 'admin123456\\"') {
+                Write-Host "backend .env file has formatting issues. Regenerating..." -ForegroundColor Yellow
+                $needsRegeneration = $true
+            } else {
+                Write-Host "backend .env already exists. Skip env generation." -ForegroundColor Green
+            }
+        } catch {
+            Write-Host "backend .env file may be corrupted. Regenerating..." -ForegroundColor Yellow
+            $needsRegeneration = $true
+        }
+    } else {
+        $needsRegeneration = $true
+    }
+    
+    if ($needsRegeneration) {
+        if ($envFile -and (Test-Path $envFile)) {
+            # Backup existing file
+            $backupFile = "$envFile.backup"
+            Copy-Item $envFile $backupFile -ErrorAction SilentlyContinue
+            Remove-Item $envFile -Force -ErrorAction SilentlyContinue
+            Write-Host "Backed up existing .env to .env.backup" -ForegroundColor Gray
+        }
+        
+        $setupScript = Join-Path (Get-Location) "scripts\setup-env.ps1"
+        if (Test-Path $setupScript) {
+            Write-Host "Running scripts\setup-env.ps1 to create .env ..." -ForegroundColor Yellow
+            powershell -ExecutionPolicy Bypass -File $setupScript
+        } else {
+            Write-Host "backend .env not found and scripts\setup-env.ps1 missing. Please create backend\.env manually." -ForegroundColor Yellow
         }
     }
 
-    # 自动补全依赖
+    # 4.2 Install backend dependencies
     if (-not (Test-Path "node_modules")) {
-        Write-Host "-> 正在安装必要组件..." -ForegroundColor Yellow
+        Write-Host "backend node_modules not found, running npm install ..." -ForegroundColor Yellow
         npm install --no-audit --no-fund
+    } else {
+        Write-Host "backend node_modules exists. Skip npm install." -ForegroundColor Green
     }
 
-    # 同步数据库架构
-    Write-Host "-> 正在同步数据库架构 (Prisma)..." -ForegroundColor Cyan
-    
-    # 即使之前报错，由于我们已经杀掉了旧进程，这里现在可以顺利完成了
+    # 4.3 Run Prisma generate and migrations
+    Write-Host "Running: npx prisma generate" -ForegroundColor Yellow
     npx prisma generate
-    npx prisma migrate dev --name auto_fix --skip-seed
     
-    Write-Host "-> 正在填充/重置演示数据..." -ForegroundColor Gray
-    npm run seed
+    Write-Host "Running: Prisma migration (non-interactive)..." -ForegroundColor Yellow
+    # Use migrate dev with explicit name and skip-seed to avoid interactive prompts
+    # This prevents the y/N prompt that causes issues in batch files
+    $migrationName = "auto_migration_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+    npx prisma migrate dev --name $migrationName --skip-seed --skip-generate
+    
+    # If migrate dev fails (e.g., no schema changes), try migrate deploy for existing migrations
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "No new migrations needed, applying existing migrations..." -ForegroundColor DarkGray
+        npx prisma migrate deploy
+    }
 }
+Write-Host ""
 
-### 2. 前端自检
-Write-Host "[2/2] 正在准备前端环境..." -ForegroundColor Yellow
+### 5. Wait for database to be ready
+Write-Host "[5/7] Waiting for database to be ready..." -ForegroundColor Yellow
+$script:maxRetries = 30
+$script:retryCount = 0
+$script:dbReady = $false
+
+Invoke-InDirectory -Path $BackendPath -ScriptBlock {
+    while ($script:retryCount -lt $script:maxRetries -and -not $script:dbReady) {
+        try {
+            $result = npm run check:db 2>&1 | Out-String
+            if ($LASTEXITCODE -eq 0) {
+                $script:dbReady = $true
+                Write-Host "Database is ready!" -ForegroundColor Green
+            } else {
+                $script:retryCount++
+                Write-Host "Waiting for database... ($($script:retryCount)/$($script:maxRetries))" -ForegroundColor DarkGray
+                Start-Sleep -Seconds 2
+            }
+        } catch {
+            $script:retryCount++
+            Write-Host "Waiting for database... ($($script:retryCount)/$($script:maxRetries))" -ForegroundColor DarkGray
+            Start-Sleep -Seconds 2
+        }
+    }
+    
+    if (-not $script:dbReady) {
+        Write-Host "WARNING: Database may not be ready. Continuing anyway..." -ForegroundColor Yellow
+    }
+}
+Write-Host ""
+
+### 6. Seed database with test data
+Write-Host "[6/7] Seeding database with test data..." -ForegroundColor Yellow
+Invoke-InDirectory -Path $BackendPath -ScriptBlock {
+    Write-Host "Running: npm run seed" -ForegroundColor Yellow
+    npm run seed
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Database seeded successfully!" -ForegroundColor Green
+    } else {
+        Write-Host "WARNING: Database seeding may have failed. Check output above." -ForegroundColor Yellow
+    }
+}
+Write-Host ""
+
+### 7. Frontend dependencies
+Write-Host "[7/7] Frontend dependencies..." -ForegroundColor Yellow
 Invoke-InDirectory -Path $FrontendPath -ScriptBlock {
     if (-not (Test-Path "node_modules")) {
+        Write-Host "frontend node_modules not found, running npm install ..." -ForegroundColor Yellow
         npm install --no-audit --no-fund
+    } else {
+        Write-Host "frontend node_modules exists. Skip npm install." -ForegroundColor Green
     }
 }
-
-### 3. 一键双开服务
 Write-Host ""
-Write-Host "✅ 纯净启动！正在拉起工作窗口..." -ForegroundColor Green
 
-Start-Process powershell -WorkingDirectory $BackendPath -ArgumentList @("-NoExit", "-Command", "npm run dev")
-Start-Process powershell -WorkingDirectory $FrontendPath -ArgumentList @("-NoExit", "-Command", "npm run dev")
+### 8. Start dev servers
+Write-Host "Starting backend and frontend dev servers..." -ForegroundColor Yellow
 
-Write-Host "后端: http://localhost:3000" -ForegroundColor Gray
-Write-Host "前端: http://localhost:5173" -ForegroundColor Gray
+Start-Process powershell -WorkingDirectory $BackendPath -ArgumentList @("-NoExit", "-Command", "npm run dev") | Out-Null
+Write-Host "Backend dev server started in new PowerShell window (port 3000 by default)." -ForegroundColor Green
+
+Start-Process powershell -WorkingDirectory $FrontendPath -ArgumentList @("-NoExit", "-Command", "npm run dev") | Out-Null
+Write-Host "Frontend dev server started in new PowerShell window (port 5173 by default)." -ForegroundColor Green
+
 Write-Host ""
-Write-Host "项目已全量启动。按回车键结束自检程序..." -ForegroundColor DarkGray
-Read-Host
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "DONE. Check the new PowerShell windows for backend/frontend logs." -ForegroundColor Cyan
+Write-Host "Backend:  http://localhost:3000" -ForegroundColor Green
+Write-Host "Frontend: http://localhost:5173" -ForegroundColor Green
+Write-Host "" -ForegroundColor Cyan
+Write-Host "Default Test Accounts:" -ForegroundColor Yellow
+Write-Host "  Developer Account: developer / 000000" -ForegroundColor Gray
+Write-Host "  Test User 1:       testuser1 / Test1234!" -ForegroundColor Gray
+Write-Host "  Test User 2:       testuser2 / Test1234!" -ForegroundColor Gray
+Write-Host "  Test User 3:       testuser3 / Test1234!" -ForegroundColor Gray
+Write-Host "  Demo Player:       demo_player / demo123" -ForegroundColor Gray
+Write-Host "" -ForegroundColor Cyan
+Write-Host "Developer Code: wskfz (for admin panels)" -ForegroundColor Yellow
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Note: Keep the PowerShell windows open to run the services." -ForegroundColor DarkGray
+Write-Host "Closing the windows will stop the corresponding services." -ForegroundColor DarkGray
+Write-Host ""

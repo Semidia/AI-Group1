@@ -56,7 +56,6 @@ Test-Step "2.1 Login with test account to get JWT" {
     $registerBody = @{
       username = "testuser_phase4"
       password = "Test1234!"
-      email    = "testuser_phase4@example.com"
     } | ConvertTo-Json
 
     Invoke-WebRequest -Uri "$BaseUrl/api/auth/register" -Method Post -Body $registerBody -ContentType "application/json" -UseBasicParsing | Out-Null
@@ -104,7 +103,8 @@ Write-Host "(Script will continue to complete basic API connectivity verificatio
 
 # 4. Verify room REST API is available
 Test-Step "4.1 Verify room list API is available" {
-  $listResp = Invoke-WebRequest -Uri "$BaseUrl/api/rooms/list" -UseBasicParsing
+  $headers = @{ Authorization = "Bearer $($global:TestToken)" }
+  $listResp = Invoke-WebRequest -Uri "$BaseUrl/api/rooms/list" -Headers $headers -UseBasicParsing
   if ($listResp.StatusCode -ne 200) {
     throw "Room list API returned status code $($listResp.StatusCode)"
   }

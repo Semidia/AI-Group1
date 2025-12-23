@@ -27,15 +27,13 @@ Write-Host ""
 $user1 = "room_tester_$(Get-Random -Minimum 1000 -Maximum 9999)"
 $user2 = "room_tester_b_$(Get-Random -Minimum 1000 -Maximum 9999)"
 $password = "password123"
-$email1 = "$user1@example.com"
-$email2 = "$user2@example.com"
 $token1 = $null
 $token2 = $null
 $roomId = $null
 
 function Register-User {
-    param($username, $email)
-    $body = @{ username = $username; email = $email; password = $password } | ConvertTo-Json
+    param($username)
+    $body = @{ username = $username; password = $password } | ConvertTo-Json
     return Invoke-RestMethod -Uri "$API_BASE/auth/register" -Method Post -Body $body -ContentType "application/json"
 }
 
@@ -48,7 +46,7 @@ function Login-User {
 # 1. Register user A
 Write-Host "1. Registering user A..." -ForegroundColor Yellow
 try {
-    $resp = Register-User $user1 $email1
+    $resp = Register-User $user1
     if ($resp.data.token) {
         $token1 = $resp.data.token
         Write-Host "   ✓ Registration successful: $user1" -ForegroundColor Green
@@ -61,7 +59,7 @@ try {
 # 2. Register user B
 Write-Host "2. Registering user B..." -ForegroundColor Yellow
 try {
-    $resp = Register-User $user2 $email2
+    $resp = Register-User $user2
     if ($resp.data.token) {
         $token2 = $resp.data.token
         Write-Host "   ✓ Registration successful: $user2" -ForegroundColor Green
@@ -115,7 +113,8 @@ try {
 # 6. Get room list
 Write-Host "6. Getting room list..." -ForegroundColor Yellow
 try {
-    $resp = Invoke-RestMethod -Uri "$API_BASE/rooms/list" -Method Get
+    $headersA = @{ "Authorization" = "Bearer $token1" }
+    $resp = Invoke-RestMethod -Uri "$API_BASE/rooms/list" -Method Get -Headers $headersA
     $total = $resp.data.total
     Write-Host "   ✓ Room list returned, total: $total" -ForegroundColor Green
 } catch {

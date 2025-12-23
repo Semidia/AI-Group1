@@ -3,6 +3,7 @@ import apiClient from './api';
 export interface GameSessionSummary {
   sessionId: string;
   roomId: string;
+  hostId?: string; // 添加hostId字段
   currentRound: number;
   roundStatus: string;
   decisionDeadline?: string | null;
@@ -93,12 +94,30 @@ export interface RoundDecisions {
 export const gameAPI = {
   startGame: async (roomId: string): Promise<GameSessionSummary> => {
     const response = await apiClient.post(`/game/${roomId}/start`);
-    return response.data.data;
+    // apiClient interceptor returns response.data, so response is { code, message, data: {...} }
+    // Backend returns { code: 200, message: '...', data: { session: { id, roomId, ... } } }
+    if (!response || !response.data || !response.data.session) {
+      throw new Error('启动游戏失败：服务器响应格式错误或配置未完成');
+    }
+    const sessionData = response.data.session;
+    return {
+      sessionId: sessionData.id,
+      roomId: sessionData.roomId,
+      currentRound: sessionData.currentRound,
+      roundStatus: sessionData.roundStatus,
+      decisionDeadline: sessionData.decisionDeadline,
+      status: sessionData.status,
+    };
   },
 
   getSession: async (sessionId: string): Promise<GameSessionSummary> => {
     const response = await apiClient.get(`/game/${sessionId}`);
-    return response.data.data;
+    // apiClient interceptor returns response.data, so response is { code, message, data: {...} }
+    // Backend returns { code: 200, data: { sessionId, roomId, ... } }
+    if (!response || !response.data) {
+      throw new Error('获取会话信息失败：服务器响应格式错误');
+    }
+    return response.data;
   },
 
   submitDecision: async (
@@ -115,14 +134,24 @@ export const gameAPI = {
   },
 
   getRoundDecisions: async (sessionId: string, round: number): Promise<RoundDecisions> => {
-    const response = await apiClient.get(`/game/${sessionId}/round/${round}/decisions`);
-    return response.data.data;
+    // apiClient interceptor 返回 { code, message, data }
+    const response = (await apiClient.get(
+      `/game/${sessionId}/round/${round}/decisions`
+    )) as any;
+    if (response?.code === 200 && response.data) {
+      return response.data as RoundDecisions;
+    }
+    throw new Error(response?.message || '获取决策列表失败');
   },
 
   // 第七阶段：主持人审核功能
   getReviewDecisions: async (sessionId: string, round: number): Promise<ReviewDecisions> => {
-    const response = await apiClient.get(`/game/${sessionId}/round/${round}/decisions/review`);
-    return response.data.data;
+    // apiClient interceptor returns response.data, so response is { code, message, data }
+    const response = await apiClient.get(`/game/${sessionId}/round/${round}/decisions/review`) as any;
+    if (response?.code === 200 && response.data) {
+      return response.data as ReviewDecisions;
+    }
+    throw new Error(response?.message || '获取审核数据失败');
   },
 
   addTemporaryEvent: async (
@@ -134,8 +163,11 @@ export const gameAPI = {
       effectiveRounds?: number;
     }
   ): Promise<TemporaryEvent> => {
-    const response = await apiClient.post(`/game/${sessionId}/round/${round}/temporary-event`, payload);
-    return response.data.data;
+    const response = await apiClient.post(`/game/${sessionId}/round/${round}/temporary-event`, payload) as any;
+    if (response?.code === 200 && response.data) {
+      return response.data as TemporaryEvent;
+    }
+    throw new Error(response?.message || '添加临时事件失败');
   },
 
   addTemporaryRule: async (
@@ -146,13 +178,27 @@ export const gameAPI = {
       effectiveRounds?: number;
     }
   ): Promise<TemporaryRule> => {
-    const response = await apiClient.post(`/game/${sessionId}/round/${round}/temporary-rule`, payload);
-    return response.data.data;
+    const response = await apiClient.post(`/game/${sessionId}/round/${round}/temporary-rule`, payload) as any;
+    if (response?.code === 200 && response.data) {
+      return response.data as TemporaryRule;
+    }
+    throw new Error(response?.message || '添加临时规则失败');
+  },
+
+  startReview: async (sessionId: string): Promise<{ sessionId: string; round: number; roundStatus: string }> => {
+    const response = await apiClient.post(`/game/${sessionId}/start-review`) as any;
+    if (response?.code === 200 && response.data) {
+      return response.data as { sessionId: string; round: number; roundStatus: string };
+    }
+    throw new Error(response?.message || '进入审核阶段失败');
   },
 
   submitToAI: async (sessionId: string, round: number): Promise<{ sessionId: string; round: number; status: string }> => {
-    const response = await apiClient.post(`/game/${sessionId}/round/${round}/submit-to-ai`);
-    return response.data.data;
+    const response = await apiClient.post(`/game/${sessionId}/round/${round}/submit-to-ai`) as any;
+    if (response?.code === 200 && response.data) {
+      return response.data as { sessionId: string; round: number; status: string };
+    }
+    throw new Error(response?.message || '提交推演失败');
   },
 
   getInferenceResult: async (
@@ -178,8 +224,14 @@ export const gameAPI = {
     completedAt?: string;
     error?: string;
   }> => {
-    const response = await apiClient.get(`/game/${sessionId}/round/${round}/inference-result`);
-    return response.data.data;
+    // apiClient interceptor返回的就是 { code, message, data }
+    const response = (await apiClient.get(
+      `/game/${sessionId}/round/${round}/inference-result`
+    )) as any;
+    if (response?.code === 200 && response.data) {
+      return response.data;
+    }
+    throw new Error(response?.message || '获取推演结果失败');
   },
 
   // 第九阶段：多回合事件进度跟踪
@@ -229,8 +281,12 @@ export const gameAPI = {
 
   // 第十阶段：游戏状态同步和回合管理
   getGameState: async (sessionId: string): Promise<GameState> => {
-    const response = await apiClient.get(`/game/${sessionId}/state`);
-    return response.data.data;
+    // apiClient interceptor returns response.data, so response is { code, message, data: {...} }
+    const response = await apiClient.get(`/game/${sessionId}/state`) as any;
+    if (response && response.code === 200 && response.data) {
+      return response.data;
+    }
+    throw new Error(response?.message || '获取游戏状态失败');
   },
 
   nextRound: async (
@@ -242,8 +298,19 @@ export const gameAPI = {
     currentRound: number;
     roundStatus: string;
   }> => {
-    const response = await apiClient.post(`/game/${sessionId}/round/${currentRound}/next`);
-    return response.data.data;
+    // apiClient interceptor 返回 { code, message, data }
+    const response = (await apiClient.post(
+      `/game/${sessionId}/round/${currentRound}/next`
+    )) as any;
+    if (response?.code === 200 && response.data) {
+      return response.data as {
+        sessionId: string;
+        previousRound: number;
+        currentRound: number;
+        roundStatus: string;
+      };
+    }
+    throw new Error(response?.message || '进入下一回合失败');
   },
 
   // 第十一阶段：历史记录管理
@@ -516,6 +583,7 @@ export const gameAPI = {
 interface GameState {
   sessionId: string;
   roomId: string;
+  hostId?: string; // 添加hostId字段
   currentRound: number;
   totalRounds: number | null;
   roundStatus: 'decision' | 'review' | 'inference' | 'result' | 'finished';

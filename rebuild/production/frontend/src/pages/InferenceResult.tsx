@@ -57,6 +57,7 @@ function InferenceResultPage() {
       const data = await gameAPI.getInferenceResult(sessionId, Number(round));
       setResult(data);
       if (data.status === 'completed' && data.result?.narrative) {
+        setNarrativeText(''); // 重置
         startTypewriter(data.result.narrative);
       }
     } catch (err: any) {
@@ -81,11 +82,23 @@ function InferenceResultPage() {
     loadResult();
     const handleProgress = (p: any) => setProgress(p);
     const handleCompleted = () => loadResult();
+    const handleFailed = (payload: any) => {
+      const errorData = payload as { error?: string; details?: string };
+      setResult({
+        sessionId: sessionId || '',
+        round: Number(round) || 0,
+        status: 'failed',
+        error: errorData.error || '推演失败',
+        completedAt: new Date().toISOString(),
+      });
+    };
     wsService.on('inference_progress', handleProgress);
     wsService.on('inference_completed', handleCompleted);
+    wsService.on('inference_failed', handleFailed);
     return () => {
       wsService.off('inference_progress', handleProgress);
       wsService.off('inference_completed', handleCompleted);
+      wsService.off('inference_failed', handleFailed);
       if (typewriterIntervalRef.current) clearInterval(typewriterIntervalRef.current);
     };
   }, [sessionId, round]);
@@ -120,8 +133,23 @@ function InferenceResultPage() {
                     <Sparkles size={48} className="mb-4" />
                     <p>正在重构因果链路，构筑时空分叉...</p>
                   </div>
+                ) : result?.status === 'failed' ? (
+                  <div className="flex flex-col items-center justify-center h-full py-20">
+                    <AlertTriangle size={48} className="mb-4 text-rose-500" />
+                    <p className="text-rose-400 font-bold mb-2">推演失败</p>
+                    <p className="text-slate-400 text-sm text-center max-w-md">
+                      {result.error || 'AI API调用失败，请检查API配置'}
+                    </p>
+                    {result.error?.includes('API') && (
+                      <p className="text-slate-500 text-xs text-center mt-4 max-w-md">
+                        提示：请检查主持人配置中的API端点、API密钥是否正确，或使用测试脚本验证API连接
+                      </p>
+                    )}
+                  </div>
                 ) : (
-                  <p className="typewriter-cursor">{narrativeText}</p>
+                  <p className="typewriter-cursor">
+                    {narrativeText || result?.result?.narrative || '暂无叙事内容'}
+                  </p>
                 )}
               </div>
             </GlassCard>

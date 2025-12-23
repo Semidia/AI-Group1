@@ -20,6 +20,7 @@ import {
   RightOutlined,
 } from '@ant-design/icons';
 import { gameAPI } from '../services/game';
+import apiClient from '../services/api';
 import { wsService } from '../services/websocket';
 import { useSocket } from '../hooks/useSocket';
 import { useMessageRouter } from '../hooks/useMessageRouter';
@@ -30,6 +31,7 @@ const { Title, Text, Paragraph } = Typography;
 interface GameState {
   sessionId: string;
   roomId: string;
+  hostId?: string; // 添加hostId字段
   currentRound: number;
   totalRounds: number | null;
   roundStatus: 'decision' | 'review' | 'inference' | 'result' | 'finished';
@@ -80,21 +82,16 @@ function GameStatePage() {
       const data = await gameAPI.getGameState(sessionId);
       setGameState(data);
       
-      // 检查是否是主持人（通过房间API）
-      try {
-        const roomData = await fetch(`/api/rooms/${data.roomId}`, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
-        }).then(res => res.json());
-        if (roomData.data) {
-          setIsHost(roomData.data.hostId === user?.id);
-        }
-      } catch {
-        // 如果获取房间信息失败，不影响主功能
+      // 检查是否是主持人（直接使用返回的hostId）
+      if (data.hostId && user?.id) {
+        setIsHost(data.hostId === user.id);
+      } else {
+        setIsHost(false);
       }
     } catch (err: any) {
-      message.error(err?.response?.data?.message || '获取游戏状态失败');
+      const errorMessage = err?.message || err?.response?.data?.message || '获取游戏状态失败';
+      message.error(errorMessage);
+      console.error('Failed to load game state:', err);
     } finally {
       setLoading(false);
     }
@@ -103,8 +100,12 @@ function GameStatePage() {
   const loadHistory = async () => {
     if (!sessionId) return;
     try {
-      const data = await gameAPI.getGameHistory(sessionId);
-      setHistory(data.history);
+      // 使用正确的API获取游戏历史记录
+      // apiClient interceptor returns response.data, so response is { code, message, data: {...} }
+      const response = await apiClient.get(`/game/${sessionId}/history`) as any;
+      if (response && response.code === 200 && response.data && response.data.history) {
+        setHistory(response.data.history);
+      }
     } catch (err: any) {
       // 历史记录加载失败不影响主功能
       console.error('Failed to load history:', err);
@@ -273,7 +274,44 @@ function GameStatePage() {
               message={`决策提交: ${gameState.submittedDecisions}/${gameState.totalPlayers}`}
               type="info"
               showIcon
+              description={
+                isHost
+                  ? '作为主持人，你可以在下方点击"进入审核阶段"按钮开始审核决策'
+                  : '等待所有玩家提交决策或倒计时结束'
+              }
             />
+          )}
+
+          {/* 主持人提示：进入审核阶段 */}
+          {isHost && gameState.roundStatus === 'decision' && (
+            <Card>
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Text strong>主持人操作</Text>
+                <Text type="secondary">
+                  所有玩家已提交决策或倒计时已结束，你可以进入审核阶段开始审核。
+                </Text>
+                <Button
+                  type="primary"
+                  size="large"
+                  block
+                  onClick={async () => {
+                    try {
+                      await gameAPI.startReview(sessionId!);
+                      message.success('已进入审核阶段');
+                      // 刷新状态
+                      await loadGameState();
+                      navigate(`/game/${sessionId}/review`);
+                    } catch (err: any) {
+                      message.error(err?.response?.data?.message || '进入审核阶段失败');
+                      // 即使失败也刷新状态
+                      loadGameState();
+                    }
+                  }}
+                >
+                  进入审核阶段
+                </Button>
+              </Space>
+            </Card>
           )}
 
           {/* 推演结果 */}
@@ -324,43 +362,41 @@ function GameStatePage() {
           {/* 回合历史 */}
           <div>
             <Title level={4}>回合历史</Title>
-            <Timeline>
-              {history.map((item, index) => (
-                <Timeline.Item
-                  key={index}
-                  dot={
-                    item.status === 'completed' ? (
-                      <CheckCircleOutlined style={{ fontSize: '16px' }} />
-                    ) : item.status === 'processing' ? (
-                      <ClockCircleOutlined style={{ fontSize: '16px' }} />
-                    ) : (
-                      <PlayCircleOutlined style={{ fontSize: '16px' }} />
-                    )
-                  }
-                  color={
-                    item.status === 'completed'
-                      ? 'green'
-                      : item.status === 'failed'
-                      ? 'red'
-                      : 'blue'
-                  }
-                >
-                  <Text strong>第 {item.round} 回合</Text>
-                  <br />
-                  <Text type="secondary">
-                    状态: {item.status === 'completed' ? '已完成' : item.status === 'failed' ? '失败' : '未知'}
-                  </Text>
-                  {item.completedAt && (
-                    <>
-                      <br />
-                      <Text type="secondary" style={{ fontSize: '12px' }}>
-                        完成时间: {new Date(item.completedAt).toLocaleString()}
-                      </Text>
-                    </>
-                  )}
-                </Timeline.Item>
-              ))}
-            </Timeline>
+            <Timeline
+              items={history.map(item => ({
+                dot:
+                  item.status === 'completed' ? (
+                    <CheckCircleOutlined style={{ fontSize: '16px' }} />
+                  ) : item.status === 'processing' ? (
+                    <ClockCircleOutlined style={{ fontSize: '16px' }} />
+                  ) : (
+                    <PlayCircleOutlined style={{ fontSize: '16px' }} />
+                  ),
+                color:
+                  item.status === 'completed'
+                    ? 'green'
+                    : item.status === 'failed'
+                    ? 'red'
+                    : 'blue',
+                children: (
+                  <>
+                    <Text strong>第 {item.round} 回合</Text>
+                    <br />
+                    <Text type="secondary">
+                      状态: {item.status === 'completed' ? '已完成' : item.status === 'failed' ? '失败' : '未知'}
+                    </Text>
+                    {item.completedAt && (
+                      <>
+                        <br />
+                        <Text type="secondary" style={{ fontSize: '12px' }}>
+                          完成时间: {new Date(item.completedAt).toLocaleString()}
+                        </Text>
+                      </>
+                    )}
+                  </>
+                ),
+              }))}
+            />
           </div>
 
           {/* 活跃事件 */}
@@ -383,9 +419,32 @@ function GameStatePage() {
           {/* 快速导航 */}
           <Divider />
           <Space>
-            <Button onClick={() => navigate(`/game/${sessionId}/review`)}>
-              审核页面
-            </Button>
+            {isHost && gameState.roundStatus === 'decision' && (
+              <Button
+                type="primary"
+                size="large"
+                onClick={async () => {
+                  try {
+                    await gameAPI.startReview(sessionId!);
+                    message.success('已进入审核阶段');
+                    // 刷新状态
+                    await loadGameState();
+                    navigate(`/game/${sessionId}/review`);
+                  } catch (err: any) {
+                    message.error(err?.response?.data?.message || '进入审核阶段失败');
+                    // 即使失败也刷新状态
+                    loadGameState();
+                  }
+                }}
+              >
+                进入审核阶段
+              </Button>
+            )}
+            {isHost && gameState.roundStatus === 'review' && (
+              <Button type="primary" onClick={() => navigate(`/game/${sessionId}/review`)}>
+                审核页面
+              </Button>
+            )}
             <Button onClick={() => navigate(`/game/${sessionId}/events`)}>
               事件进度
             </Button>

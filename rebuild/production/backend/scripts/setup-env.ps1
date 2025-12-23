@@ -1,145 +1,173 @@
-# 环境配置快速设置脚本
-# 用于创建 .env 文件（如果不存在）
+# Environment configuration quick setup script
+# Used to create .env file (if it doesn't exist)
 
 $ErrorActionPreference = "Stop"
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "环境配置快速设置" -ForegroundColor Cyan
+Write-Host "Environment Configuration Quick Setup" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
 $envFile = ".env"
 $envExample = ".env.example"
 
-# 检查 .env 文件是否存在
+# Check if .env file exists
 if (Test-Path $envFile) {
-    Write-Host "✓ .env 文件已存在，跳过创建" -ForegroundColor Green
+    Write-Host "[OK] .env file already exists, skipping creation" -ForegroundColor Green
     Write-Host ""
+    # Validate .env file format and DATABASE_URL
+    try {
+        $envContent = Get-Content $envFile -Raw
+        # Check for common issues: unmatched quotes, invalid characters
+        if ($envContent -match '\\"[^"]*$' -or $envContent -match '[^=]"[^=]*"[^=]') {
+            Write-Host "[WARN] .env file may have formatting issues. If Docker fails, try deleting .env and re-running this script." -ForegroundColor Yellow
+        }
+        # Check DATABASE_URL format
+        if ($envContent -match 'DATABASE_URL\s*=') {
+            $dbUrlMatch = [regex]::Match($envContent, 'DATABASE_URL\s*=\s*"([^"]+)"')
+            if ($dbUrlMatch.Success) {
+                $dbUrl = $dbUrlMatch.Groups[1].Value
+                if ($dbUrl -notmatch 'postgresql://game_user:game_password@localhost:5432/game_db') {
+                    Write-Host "[WARN] DATABASE_URL does not match expected format." -ForegroundColor Yellow
+                    Write-Host "  Expected: postgresql://game_user:game_password@localhost:5432/game_db?schema=public" -ForegroundColor Gray
+                    Write-Host "  Found: $dbUrl" -ForegroundColor Gray
+                }
+            }
+        }
+    } catch {
+        Write-Host "[WARN] Could not validate .env file format." -ForegroundColor Yellow
+    }
     exit 0
 }
 
-# 如果 .env.example 存在，询问是否使用它作为模板
+# If .env.example exists, use it as template
 if (Test-Path $envExample) {
-    Write-Host "✓ 找到 .env.example 模板文件" -ForegroundColor Green
+    Write-Host "[OK] Found .env.example template file" -ForegroundColor Green
     Write-Host ""
 }
 
-# 检查 docker-compose.yml 是否存在
+# Check if docker-compose.yml exists
 $useDocker = $false
 if (Test-Path "docker-compose.yml") {
     $useDocker = $true
-    Write-Host "✓ 检测到 docker-compose.yml，将使用 Docker 配置" -ForegroundColor Green
+    Write-Host "[OK] Detected docker-compose.yml, will use Docker configuration" -ForegroundColor Green
 }
 
 Write-Host ""
-Write-Host "正在创建 .env 文件..." -ForegroundColor Yellow
+Write-Host "Creating .env file..." -ForegroundColor Yellow
 
-# 生成 JWT Secret（随机字符串）
+# Generate JWT Secret (random string)
 $jwtSecret = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 32 | ForEach-Object { [char]$_ })
 $jwtRefreshSecret = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 32 | ForEach-Object { [char]$_ })
 
-# 创建 .env 文件内容
-# 如果 .env.example 存在，先读取它作为模板
+# Create .env file content
+# If .env.example exists, read it as template first
 if (Test-Path $envExample) {
-    Write-Host "从 .env.example 创建 .env 文件..." -ForegroundColor DarkGray
+    Write-Host "Creating .env file from .env.example..." -ForegroundColor DarkGray
     $envContent = Get-Content $envExample -Raw
     
-    # 替换 JWT Secret（如果模板中有占位符）
+    # Replace JWT Secret (if template has placeholders)
     $envContent = $envContent -replace 'JWT_SECRET="your-secret-key-change-this-in-production"', "JWT_SECRET=`"$jwtSecret`""
     $envContent = $envContent -replace 'JWT_REFRESH_SECRET="your-refresh-secret-key-change-this-in-production"', "JWT_REFRESH_SECRET=`"$jwtRefreshSecret`""
 }
 else {
-    # 如果没有 .env.example，使用默认配置
+    # If no .env.example, use default configuration
     $envContent = @"
-# 数据库配置
+# Database configuration
 DATABASE_URL="postgresql://game_user:game_password@localhost:5432/game_db?schema=public"
 
-# Redis配置
+# Redis configuration
 REDIS_URL="redis://localhost:6379"
 
-# 服务器配置
+# Server configuration
 PORT=3000
 NODE_ENV=development
 
-# JWT配置（自动生成）
+# JWT configuration (auto-generated)
 JWT_SECRET="$jwtSecret"
 JWT_REFRESH_SECRET="$jwtRefreshSecret"
 JWT_EXPIRES_IN="1h"
 JWT_REFRESH_EXPIRES_IN="7d"
 
-# 前端URL
+# Frontend URL
 FRONTEND_URL="http://localhost:5173"
 
-# 密码重置配置
+# Password reset configuration
 RESET_PASSWORD_TOKEN_EXPIRES_IN="1h"
 
-# 文件上传配置
+# File upload configuration
 UPLOAD_DIR="./uploads"
 MAX_FILE_SIZE=5242880
 
-# 管理员账号配置（可选）
+# Admin account configuration (optional)
 ADMIN_USERNAME="developer"
 ADMIN_DEFAULT_PASSWORD="000000"
 "@
 }
 
-# 写入文件
-$envContent | Out-File -FilePath $envFile -Encoding utf8 -NoNewline
+# Write to file
+# Ensure proper line endings and encoding (UTF-8 without BOM)
+$envFilePath = Join-Path (Get-Location) $envFile
+$utf8NoBom = New-Object System.Text.UTF8Encoding $false
+# Normalize line endings to CRLF for Windows compatibility
+$lines = $envContent -split "`r?`n"
+$cleanContent = $lines -join "`r`n"
+[System.IO.File]::WriteAllText($envFilePath, $cleanContent, $utf8NoBom)
 
-Write-Host "✓ .env 文件已创建" -ForegroundColor Green
+Write-Host "[OK] .env file created" -ForegroundColor Green
 Write-Host ""
 
-# 检查 Docker 容器状态
+# Check Docker container status
 if ($useDocker) {
-    Write-Host "检查 Docker 容器状态..." -ForegroundColor Yellow
+    Write-Host "Checking Docker container status..." -ForegroundColor Yellow
     $containers = docker ps -a --format "{{.Names}}" 2>$null
     
     if ($containers -match "game-postgres") {
         $postgresRunning = docker ps --format "{{.Names}}" | Select-String "game-postgres"
         if ($postgresRunning) {
-            Write-Host "✓ PostgreSQL 容器运行中" -ForegroundColor Green
+            Write-Host "[OK] PostgreSQL container is running" -ForegroundColor Green
         }
         else {
-            Write-Host "⚠ PostgreSQL 容器存在但未运行" -ForegroundColor Yellow
-            Write-Host "  启动命令: docker-compose up -d postgres" -ForegroundColor Gray
+            Write-Host "[WARN] PostgreSQL container exists but is not running" -ForegroundColor Yellow
+            Write-Host "  Start command: docker-compose up -d postgres" -ForegroundColor Gray
         }
     }
     else {
-        Write-Host "⚠ PostgreSQL 容器不存在" -ForegroundColor Yellow
-        Write-Host "  启动命令: docker-compose up -d postgres" -ForegroundColor Gray
+        Write-Host "[WARN] PostgreSQL container does not exist" -ForegroundColor Yellow
+        Write-Host "  Start command: docker-compose up -d postgres" -ForegroundColor Gray
     }
     
     if ($containers -match "game-redis") {
         $redisRunning = docker ps --format "{{.Names}}" | Select-String "game-redis"
         if ($redisRunning) {
-            Write-Host "✓ Redis 容器运行中" -ForegroundColor Green
+            Write-Host "[OK] Redis container is running" -ForegroundColor Green
         }
         else {
-            Write-Host "⚠ Redis 容器存在但未运行" -ForegroundColor Yellow
-            Write-Host "  启动命令: docker-compose up -d redis" -ForegroundColor Gray
+            Write-Host "[WARN] Redis container exists but is not running" -ForegroundColor Yellow
+            Write-Host "  Start command: docker-compose up -d redis" -ForegroundColor Gray
         }
     }
     else {
-        Write-Host "⚠ Redis 容器不存在（可选）" -ForegroundColor Yellow
+        Write-Host "[WARN] Redis container does not exist (optional)" -ForegroundColor Yellow
     }
 }
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "下一步操作" -ForegroundColor Cyan
+Write-Host "Next Steps" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "1. 启动数据库服务（如果使用 Docker）:" -ForegroundColor Yellow
+Write-Host "1. Start database service (if using Docker):" -ForegroundColor Yellow
 Write-Host "   docker-compose up -d postgres redis" -ForegroundColor Gray
 Write-Host ""
-Write-Host "2. 运行数据库迁移:" -ForegroundColor Yellow
+Write-Host "2. Run database migration:" -ForegroundColor Yellow
 Write-Host "   npm run prisma:migrate" -ForegroundColor Gray
 Write-Host ""
-Write-Host "3. 验证配置:" -ForegroundColor Yellow
+Write-Host "3. Verify configuration:" -ForegroundColor Yellow
 Write-Host "   npm run check:db" -ForegroundColor Gray
 Write-Host ""
-Write-Host "4. 重新运行测试:" -ForegroundColor Yellow
-Write-Host "   cd ../../各阶段测试用/第一阶段+第二阶段连续测试" -ForegroundColor Gray
+Write-Host "4. Re-run tests:" -ForegroundColor Yellow
+Write-Host "   cd ../../test-phases/common-tests" -ForegroundColor Gray
 Write-Host "   .\test-phase1-2.ps1" -ForegroundColor Gray
 Write-Host ""
 

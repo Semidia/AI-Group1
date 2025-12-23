@@ -60,11 +60,16 @@ function GameSessionPage() {
       try {
         const data = await gameAPI.getSession(sessionId);
         setSession(data);
+        
+        // 如果是主持人，跳转到游戏状态页面
+        if (data.hostId && user?.id && data.hostId === user.id) {
+          navigate(`/game/${sessionId}/state`, { replace: true });
+        }
       } catch (err) {
         message.error('获取会话信息失败');
       }
     },
-    [sessionId]
+    [sessionId, user?.id, navigate]
   );
 
   const loadDecisions = useMemo(
@@ -97,8 +102,15 @@ function GameSessionPage() {
 
     const handleGameStateUpdate = (payload: any) => {
       setSession(prev => (prev ? { ...prev, ...payload } : payload));
+
+      // 决策阶段提示
       if (payload.roundStatus === 'decision') {
         message.info(`第 ${payload.currentRound} 回合决策开始`);
+      }
+
+      // 当回合进入结果阶段时，自动跳转到推演结果页
+      if (payload.roundStatus === 'result' && sessionId && payload.currentRound) {
+        navigate(`/game/${sessionId}/round/${payload.currentRound}/inference`);
       }
     };
 
@@ -176,6 +188,19 @@ function GameSessionPage() {
             <div className={`w-2 h-2 rounded-full ${socketStatus === 'connected' ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-rose-500'}`} />
             <span className="text-sm font-medium">{socketStatus === 'connected' ? 'LIVE' : 'OFFLINE'}</span>
           </div>
+
+          {/* 当回合处于结果阶段时，给玩家一个显式入口查看推演结果 */}
+          {session.roundStatus === 'result' && (
+            <Button
+              type="primary"
+              size="small"
+              onClick={() =>
+                navigate(`/game/${sessionId}/round/${session.currentRound}/inference`)
+              }
+            >
+              查看本回合结果
+            </Button>
+          )}
         </div>
       </header>
 
@@ -305,13 +330,8 @@ function GameSessionPage() {
 
           <GlassCard title="大事纪" extra={<Info size={18} />}>
             <div className="text-xs text-slate-500 space-y-3">
-              <div className="flex gap-2">
-                <div className="w-1 h-1 rounded-full bg-slate-500 mt-1.5 shrink-0" />
-                <p>第 3 回合：玩家 1 发起了全员资源置换协议。</p>
-              </div>
-              <div className="flex gap-2">
-                <div className="w-1 h-1 rounded-full bg-slate-500 mt-1.5 shrink-0" />
-                <p>第 2 回合：AI 生成了第一个突发事件：电磁脉冲。</p>
+              <div className="text-center py-4 text-slate-400">
+                暂无大事纪记录
               </div>
             </div>
           </GlassCard>

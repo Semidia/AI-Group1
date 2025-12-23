@@ -75,6 +75,10 @@ export const roomAPI = {
   close: async (roomId: string): Promise<void> => {
     await apiClient.post(`/rooms/${roomId}/close`);
   },
+
+  killGame: async (roomId: string): Promise<void> => {
+    await apiClient.post(`/rooms/${roomId}/kill-game`);
+  },
 };
 
 export const hostConfigAPI = {

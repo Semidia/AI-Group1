@@ -61,13 +61,15 @@ class WebSocketService {
 
   on(event: string, callback: (data: unknown) => void): void {
     if (this.socket) {
-      this.socket.on(event, callback);
+      // Socket.io 的原生事件（connect, disconnect, connect_error）需要直接绑定
+      // 这些事件在 socket 创建时就会触发，所以需要立即绑定
+      this.socket.on(event, callback as any);
     }
   }
 
   off(event: string, callback?: (data: unknown) => void): void {
     if (this.socket) {
-      this.socket.off(event, callback);
+      this.socket.off(event, callback as any);
     }
   }
 

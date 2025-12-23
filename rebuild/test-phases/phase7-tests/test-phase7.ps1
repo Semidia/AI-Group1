@@ -71,7 +71,6 @@ Test-Step "2.1 Get host user Token (testuser_phase7_host)" {
     $registerBody = @{
       username = "testuser_phase7_host"
       password = "Test1234!"
-      email    = "testuser_phase7_host@example.com"
     } | ConvertTo-Json
     Invoke-WebRequest -Uri "$BaseUrl/api/auth/register" -Method Post -Body $registerBody -ContentType "application/json" -UseBasicParsing | Out-Null
     $loginResp = Invoke-WebRequest -Uri "$BaseUrl/api/auth/login" -Method Post -Body $loginBody -ContentType "application/json" -UseBasicParsing
@@ -115,13 +114,13 @@ Test-Step "3.2 Configure host parameters" {
     decisionTimeLimit     = 5
     timeoutStrategy       = "auto_submit"
   } | ConvertTo-Json
-  Invoke-WebRequest -Uri "$BaseUrl/api/rooms/$($global:TestRoomId)/host-config/players" -Method Post -Headers $hostHeaders -Body $body -UseBasicParsing | Out-Null
+  Invoke-WebRequest -Uri "$BaseUrl/api/rooms/$($global:TestRoomId)/host-config/players" -Method Post -Headers $hostHeaders -Body $body -ContentType "application/json" -UseBasicParsing | Out-Null
 
   $rulesBody = @{ gameRules = "Phase7 Review Test Rules: Test game rules for review functionality" } | ConvertTo-Json
-  Invoke-WebRequest -Uri "$BaseUrl/api/rooms/$($global:TestRoomId)/host-config/rules" -Method Post -Headers $hostHeaders -Body $rulesBody -UseBasicParsing | Out-Null
+  Invoke-WebRequest -Uri "$BaseUrl/api/rooms/$($global:TestRoomId)/host-config/rules" -Method Post -Headers $hostHeaders -Body $rulesBody -ContentType "application/json" -UseBasicParsing | Out-Null
 
   $validateBody = @{ status = "validated"; message = "ok" } | ConvertTo-Json
-  Invoke-WebRequest -Uri "$BaseUrl/api/rooms/$($global:TestRoomId)/host-config/validate" -Method Post -Headers $hostHeaders -Body $validateBody -UseBasicParsing | Out-Null
+  Invoke-WebRequest -Uri "$BaseUrl/api/rooms/$($global:TestRoomId)/host-config/validate" -Method Post -Headers $hostHeaders -Body $validateBody -ContentType "application/json" -UseBasicParsing | Out-Null
 
   Invoke-WebRequest -Uri "$BaseUrl/api/rooms/$($global:TestRoomId)/host-config/complete" -Method Post -Headers $hostHeaders -UseBasicParsing | Out-Null
 }
@@ -142,7 +141,6 @@ Test-Step "4.1 Get player user Token (testuser_phase7_player)" {
     $registerBody = @{
       username = "testuser_phase7_player"
       password = "Test1234!"
-      email    = "testuser_phase7_player@example.com"
     } | ConvertTo-Json
     Invoke-WebRequest -Uri "$BaseUrl/api/auth/register" -Method Post -Body $registerBody -ContentType "application/json" -UseBasicParsing | Out-Null
     $loginResp = Invoke-WebRequest -Uri "$BaseUrl/api/auth/login" -Method Post -Body $loginBody -ContentType "application/json" -UseBasicParsing
@@ -170,10 +168,13 @@ $global:SessionId = $null
 Test-Step "6.1 Start game and create session" {
   $resp = Invoke-WebRequest -Uri "$BaseUrl/api/game/$($global:TestRoomId)/start" -Method Post -Headers $hostHeaders -UseBasicParsing
   $json = $resp.Content | ConvertFrom-Json
-  if (-not $json.data -or -not $json.data.sessionId) {
-    throw "data.sessionId field not found in start game response"
+  if (-not $json.data -or -not $json.data.session) {
+    throw "data.session field not found in start game response"
   }
-  $global:SessionId = $json.data.sessionId
+  if (-not $json.data.session.id) {
+    throw "data.session.id field not found in start game response"
+  }
+  $global:SessionId = $json.data.session.id
 }
 
 # 7. Player submits decision
@@ -182,7 +183,7 @@ Test-Step "7.1 Player submits decision" {
     round      = 1
     actionText = "Phase7 test decision: I will cooperate with other players"
   } | ConvertTo-Json
-  Invoke-WebRequest -Uri "$BaseUrl/api/game/$($global:SessionId)/decision" -Method Post -Headers $playerHeaders -Body $body -UseBasicParsing | Out-Null
+  Invoke-WebRequest -Uri "$BaseUrl/api/game/$($global:SessionId)/decision" -Method Post -Headers $playerHeaders -Body $body -ContentType "application/json" -UseBasicParsing | Out-Null
 }
 
 # 8. Host gets review decisions (requires roundStatus to be 'review')
@@ -219,7 +220,7 @@ Test-Step "9.1 Host adds temporary event (POST /api/game/{sessionId}/round/{roun
       eventType    = "single_round"
       eventContent = "Phase7 test event: A sudden storm hits the region"
     } | ConvertTo-Json
-    $resp = Invoke-WebRequest -Uri "$BaseUrl/api/game/$($global:SessionId)/round/1/temporary-event" -Method Post -Headers $hostHeaders -Body $body -UseBasicParsing
+    $resp = Invoke-WebRequest -Uri "$BaseUrl/api/game/$($global:SessionId)/round/1/temporary-event" -Method Post -Headers $hostHeaders -Body $body -ContentType "application/json" -UseBasicParsing
     $json = $resp.Content | ConvertFrom-Json
     if (-not $json.data -or -not $json.data.id) {
       throw "Temporary event response structure is incorrect"
@@ -245,7 +246,7 @@ Test-Step "10.1 Host adds multi-round temporary event" {
       eventContent   = "Phase7 test multi-round event: Ongoing trade negotiations"
       effectiveRounds = 3
     } | ConvertTo-Json
-    $resp = Invoke-WebRequest -Uri "$BaseUrl/api/game/$($global:SessionId)/round/1/temporary-event" -Method Post -Headers $hostHeaders -Body $body -UseBasicParsing
+    $resp = Invoke-WebRequest -Uri "$BaseUrl/api/game/$($global:SessionId)/round/1/temporary-event" -Method Post -Headers $hostHeaders -Body $body -ContentType "application/json" -UseBasicParsing
     $json = $resp.Content | ConvertFrom-Json
     if (-not $json.data -or -not $json.data.id) {
       throw "Multi-round temporary event response structure is incorrect"
@@ -270,7 +271,7 @@ Test-Step "11.1 Host adds temporary rule (POST /api/game/{sessionId}/round/{roun
       ruleContent    = "Phase7 test rule: All trade transactions require approval from at least 2 players"
       effectiveRounds = 2
     } | ConvertTo-Json
-    $resp = Invoke-WebRequest -Uri "$BaseUrl/api/game/$($global:SessionId)/round/1/temporary-rule" -Method Post -Headers $hostHeaders -Body $body -UseBasicParsing
+    $resp = Invoke-WebRequest -Uri "$BaseUrl/api/game/$($global:SessionId)/round/1/temporary-rule" -Method Post -Headers $hostHeaders -Body $body -ContentType "application/json" -UseBasicParsing
     $json = $resp.Content | ConvertFrom-Json
     if (-not $json.data -or -not $json.data.id) {
       throw "Temporary rule response structure is incorrect"

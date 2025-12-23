@@ -71,7 +71,6 @@ Test-Step "2.1 Get host user Token (testuser_phase8_host)" {
     $registerBody = @{
       username = "testuser_phase8_host"
       password = "Test1234!"
-      email    = "testuser_phase8_host@example.com"
     } | ConvertTo-Json
     Invoke-WebRequest -Uri "$BaseUrl/api/auth/register" -Method Post -Body $registerBody -ContentType "application/json" -UseBasicParsing | Out-Null
     $loginResp = Invoke-WebRequest -Uri "$BaseUrl/api/auth/login" -Method Post -Body $loginBody -ContentType "application/json" -UseBasicParsing
@@ -168,7 +167,6 @@ Test-Step "4.1 Get player user Token (testuser_phase8_player)" {
     $registerBody = @{
       username = "testuser_phase8_player"
       password = "Test1234!"
-      email    = "testuser_phase8_player@example.com"
     } | ConvertTo-Json
     Invoke-WebRequest -Uri "$BaseUrl/api/auth/register" -Method Post -Body $registerBody -ContentType "application/json" -UseBasicParsing | Out-Null
     $loginResp = Invoke-WebRequest -Uri "$BaseUrl/api/auth/login" -Method Post -Body $loginBody -ContentType "application/json" -UseBasicParsing
@@ -196,10 +194,10 @@ $global:SessionId = $null
 Test-Step "6.1 Start game and create session" {
   $resp = Invoke-WebRequest -Uri "$BaseUrl/api/game/$($global:TestRoomId)/start" -Method Post -Headers $hostHeaders -UseBasicParsing
   $json = $resp.Content | ConvertFrom-Json
-  if (-not $json.data -or -not $json.data.sessionId) {
-    throw "data.sessionId field not found in start game response"
+  if (-not $json.data -or -not $json.data.session -or -not $json.data.session.id) {
+    throw "data.session.id field not found in start game response"
   }
-  $global:SessionId = $json.data.sessionId
+  $global:SessionId = $json.data.session.id
 }
 
 # 7. Player submits decision

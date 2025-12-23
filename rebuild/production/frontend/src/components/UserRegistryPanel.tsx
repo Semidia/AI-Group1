@@ -21,9 +21,9 @@ function UserRegistryPanel({ open, onClose }: UserRegistryPanelProps) {
   const [devModeEnabled, setDevModeEnabled] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
-  // 支持多个开发者用户名（与后端保持一致）
-  const adminUsername = import.meta.env.VITE_ADMIN_USERNAME || '开发者账号';
-  const adminUsernames = [adminUsername, '开发者账号', 'developer'];
+  // Support multiple developer usernames (consistent with backend)
+  const adminUsername = import.meta.env.VITE_ADMIN_USERNAME || 'developer';
+  const adminUsernames = [adminUsername, 'developer', '开发者账号']; // Legacy support for old data
   const isDeveloper = user?.username ? adminUsernames.includes(user.username) : false;
 
   const loadUsers = async (pageNum = page, size = pageSize, status = statusFilter) => {

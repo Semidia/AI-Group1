@@ -105,6 +105,13 @@ router.post('/:roomId/start', authenticateToken, async (req: AuthRequest, res, n
       decisionDeadline: session.decisionDeadline,
       status: session.status,
     });
+    // 发送游戏开始事件，通知所有玩家跳转
+    io.to(roomId).emit('game_started', {
+      roomId,
+      sessionId: session.id,
+      currentRound: session.currentRound,
+      roundStatus: session.roundStatus,
+    });
 
     res.json({
       code: 200,
@@ -528,6 +535,7 @@ router.get('/:sessionId', authenticateToken, async (req: AuthRequest, res, next)
       data: {
         sessionId: session.id,
         roomId: session.roomId,
+        hostId: session.room.hostId, // 添加hostId，方便前端判断是否是主持人
         currentRound: session.currentRound,
         roundStatus: session.roundStatus,
         decisionDeadline: session.decisionDeadline,
@@ -560,6 +568,16 @@ router.post('/:sessionId/decision', authenticateToken, async (req: AuthRequest, 
 
     // 校验用户在房间中
     const membership = await ensureRoomMembership(session.roomId, userId);
+
+    logger.info(`Decision submission received`, {
+      sessionId,
+      userId,
+      round: effectiveRound,
+      hasActionText: !!actionText,
+      hasSelectedOptions: !!selectedOptionIds,
+      hasActionData: !!actionData,
+      actionType: actionType || 'none',
+    });
 
     if (session.status !== 'playing') {
       throw new AppError('当前会话未处于进行中状态，无法提交决策', 400);
@@ -596,11 +614,23 @@ router.post('/:sessionId/decision', authenticateToken, async (req: AuthRequest, 
 
     let action;
     if (existing) {
+      logger.info(`Updating existing decision`, {
+        sessionId,
+        userId,
+        round: effectiveRound,
+        actionId: existing.id,
+      });
       action = await prisma.playerAction.update({
         where: { id: existing.id },
         data: payloadData,
       });
     } else {
+      logger.info(`Creating new decision`, {
+        sessionId,
+        userId,
+        round: effectiveRound,
+        playerIndex: membership.playerIndex ?? 0,
+      });
       action = await prisma.playerAction.create({
         data: {
           sessionId,
@@ -615,6 +645,14 @@ router.post('/:sessionId/decision', authenticateToken, async (req: AuthRequest, 
         },
       });
     }
+
+    logger.info(`Decision submitted successfully`, {
+      sessionId,
+      userId,
+      round: effectiveRound,
+      actionId: action.id,
+      status: action.status,
+    });
 
     // 通知房间内其他玩家决策状态更新
     io.to(session.roomId).emit('decision_status_update', {
@@ -634,6 +672,82 @@ router.post('/:sessionId/decision', authenticateToken, async (req: AuthRequest, 
         round: action.round,
         status: action.status,
         submittedAt: action.submittedAt,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/game/:sessionId/start-review
+ * 进入审核阶段（主持人专用）
+ */
+router.post('/:sessionId/start-review', authenticateToken, async (req: AuthRequest, res, next) => {
+  try {
+    const userId = req.userId;
+    const { sessionId } = req.params;
+    if (!userId) throw new AppError('Unauthorized', 401);
+
+    const session = await prisma.gameSession.findUnique({
+      where: { id: sessionId },
+      include: { room: true },
+    });
+    if (!session) throw new AppError('游戏会话不存在', 404);
+
+    // 确保用户是主持人
+    await ensureRoomHost(session.roomId, userId);
+
+    // 确保当前阶段是 decision
+    if (session.roundStatus !== 'decision') {
+      throw new AppError(`当前阶段是 ${session.roundStatus}，无法进入审核阶段`, 400);
+    }
+
+    // 更新为 review 阶段
+    await prisma.gameSession.update({
+      where: { id: sessionId },
+      data: {
+        roundStatus: 'review',
+      },
+    });
+
+    // 广播阶段切换通知
+    io.to(session.roomId).emit('round_stage_changed', {
+      sessionId,
+      round: session.currentRound,
+      stage: 'review',
+    });
+
+    // 同步游戏状态给所有客户端（玩家页面依赖 game_state_update）
+    io.to(session.roomId).emit('game_state_update', {
+      roomId: session.roomId,
+      sessionId,
+      currentRound: session.currentRound,
+      roundStatus: 'review',
+      decisionDeadline: session.decisionDeadline,
+      status: session.status,
+    });
+
+    io.to(session.roomId).emit('stage_changed', {
+      sessionId,
+      round: session.currentRound,
+      stage: 'review',
+      previousStage: 'decision',
+    });
+
+    logger.info(`Game session ${sessionId} entered review phase`, {
+      sessionId,
+      round: session.currentRound,
+      userId,
+    });
+
+    res.json({
+      code: 200,
+      message: '已进入审核阶段',
+      data: {
+        sessionId,
+        round: session.currentRound,
+        roundStatus: 'review',
       },
     });
   } catch (error) {
@@ -987,6 +1101,14 @@ router.post(
         throw new AppError('主持人配置未完成，无法提交推演', 400);
       }
 
+      // 验证API配置
+      logger.info(`Submitting to AI for session ${sessionId}, round ${roundNumber}`, {
+        endpoint: hostConfig.apiEndpoint,
+        provider: hostConfig.apiProvider,
+        hasHeaders: !!hostConfig.apiHeaders,
+        hasBodyTemplate: !!hostConfig.apiBodyTemplate,
+      });
+
       // 获取所有决策
       const actions = await prisma.playerAction.findMany({
         where: {
@@ -1004,6 +1126,15 @@ router.post(
           },
         },
         orderBy: { submittedAt: 'asc' },
+      });
+
+      logger.info(`Found ${actions.length} decisions for session ${sessionId}, round ${roundNumber}`, {
+        actions: actions.map(a => ({
+          playerIndex: a.playerIndex,
+          username: a.user.username,
+          hasActionText: !!a.actionText,
+          hasSelectedOptions: !!a.selectedOptionIds,
+        })),
       });
 
       // 获取活跃的多回合事件及其进度
@@ -1060,11 +1191,29 @@ router.post(
 
       // 异步执行AI推演（不阻塞响应）
       const aiConfig = {
-        provider: hostConfig.apiProvider,
+        provider: hostConfig.apiProvider || null,
         endpoint: hostConfig.apiEndpoint,
-        headers: hostConfig.apiHeaders as Record<string, unknown> | null,
-        bodyTemplate: hostConfig.apiBodyTemplate as Record<string, unknown> | null,
+        headers: (hostConfig.apiHeaders && typeof hostConfig.apiHeaders === 'object') 
+          ? (hostConfig.apiHeaders as Record<string, unknown>) 
+          : null,
+        bodyTemplate: (hostConfig.apiBodyTemplate && typeof hostConfig.apiBodyTemplate === 'object')
+          ? (hostConfig.apiBodyTemplate as Record<string, unknown>)
+          : null,
       };
+
+      // 验证配置完整性
+      if (!aiConfig.endpoint) {
+        throw new AppError('API端点未配置', 400);
+      }
+
+      logger.info(`AI Config prepared for session ${sessionId}, round ${roundNumber}`, {
+        endpoint: aiConfig.endpoint,
+        provider: aiConfig.provider,
+        hasHeaders: !!aiConfig.headers,
+        hasBodyTemplate: !!aiConfig.bodyTemplate,
+        headersKeys: aiConfig.headers ? Object.keys(aiConfig.headers) : [],
+        bodyTemplateKeys: aiConfig.bodyTemplate ? Object.keys(aiConfig.bodyTemplate) : [],
+      });
 
       // 将推演任务加入Redis队列（异步处理）
       const inferenceTask = {
@@ -1195,6 +1344,25 @@ async function performInferenceAsync(
   }
 ): Promise<void> {
   try {
+    // 记录推演开始
+    logger.info(`Starting inference for session ${sessionId}, round ${round}`, {
+      endpoint: aiConfig.endpoint,
+      provider: aiConfig.provider,
+      decisionsCount: inferenceData.decisions?.length || 0,
+      activeEventsCount: inferenceData.activeEvents?.length || 0,
+      hasGameRules: !!inferenceData.gameRules,
+    });
+
+    // 验证配置
+    if (!aiConfig.endpoint) {
+      throw new Error('AI API endpoint not configured');
+    }
+
+    // 验证决策数据
+    if (!inferenceData.decisions || inferenceData.decisions.length === 0) {
+      logger.warn(`No decisions found for session ${sessionId}, round ${round}, proceeding anyway`);
+    }
+
     // 发送推演进度更新
     io.to(roomId).emit('inference_progress', {
       sessionId,
@@ -1207,7 +1375,13 @@ async function performInferenceAsync(
     await updateEventProgressAfterInference(sessionId, round);
 
     // 调用AI服务
+    logger.info(`Calling AI service for session ${sessionId}, round ${round}`);
     const result = await aiService.performInference(aiConfig, inferenceData);
+    logger.info(`AI service returned result for session ${sessionId}, round ${round}`, {
+      hasNarrative: !!result.narrative,
+      outcomesCount: result.outcomes?.length || 0,
+      eventsCount: result.events?.length || 0,
+    });
 
     // 发送推演进度更新
     io.to(roomId).emit('inference_progress', {
@@ -1323,6 +1497,16 @@ async function performInferenceAsync(
       result,
     });
 
+    // 同步游戏状态到 result 阶段（玩家端有的只监听 game_state_update）
+    io.to(roomId).emit('game_state_update', {
+      roomId,
+      sessionId,
+      currentRound: round,
+      roundStatus: 'result',
+      decisionDeadline: updatedSession.decisionDeadline,
+      status: updatedSession.status,
+    });
+
     // 广播阶段切换通知
     io.to(roomId).emit('stage_changed', {
       sessionId,
@@ -1365,11 +1549,24 @@ async function performInferenceAsync(
     // 删除任务标记
     await redis.del(`inference:task:${sessionId}:${round}`);
 
+    // 构建详细的错误消息
+    let errorMessage = error.message || '推演失败';
+    
+    // 如果是API连接错误，提供更详细的提示
+    if (error.message?.includes('API') || error.message?.includes('endpoint') || error.message?.includes('连接')) {
+      errorMessage = `AI API连接失败: ${error.message}`;
+    } else if (error.message?.includes('密钥') || error.message?.includes('401')) {
+      errorMessage = `AI API认证失败: 请检查API密钥配置`;
+    } else if (error.message?.includes('404')) {
+      errorMessage = `AI API端点不存在: 请检查endpoint配置`;
+    }
+    
     // 广播推演失败通知
     io.to(roomId).emit('inference_failed', {
       sessionId,
       round,
-      error: error.message || '推演失败',
+      error: errorMessage,
+      details: error.message,
     });
 
     throw error;
@@ -1707,6 +1904,7 @@ router.get(
         data: {
           sessionId: session.id,
           roomId: session.roomId,
+          hostId: session.room.hostId, // 添加hostId，方便前端判断是否是主持人
           currentRound: session.currentRound,
           totalRounds: session.totalRounds,
           roundStatus: session.roundStatus,

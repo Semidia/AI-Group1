@@ -142,16 +142,27 @@ async function main() {
           data: {
             roomId: firstRoom.id,
             createdBy: firstRoom.hostId,
-            apiProvider: 'openai',
-            apiEndpoint: 'https://api.openai.com/v1/chat/completions',
-            apiHeaders: { Authorization: 'Bearer sk-YOUR-KEY-HERE' },
-            apiConfig: { provider: 'openai' },
+            apiProvider: 'deepseek',
+            apiEndpoint: 'https://api.deepseek.com/v1/chat/completions',
+            apiHeaders: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer sk-YOUR-KEY-HERE'
+            },
+            apiConfig: { provider: 'deepseek' },
             apiBodyTemplate: {
-              model: 'gpt-3.5-turbo',
-              temperature: 0.7,
+              model: 'deepseek-chat',
               messages: [
-                { role: 'system', content: '你是一个专业的文字交互游戏主持人。' }
-              ]
+                {
+                  role: 'system',
+                  content: '你是一个游戏推演引擎，根据玩家的决策和游戏规则，生成游戏剧情和结果。'
+                },
+                {
+                  role: 'user',
+                  content: '{{prompt}}'
+                }
+              ],
+              temperature: 0.7,
+              max_tokens: 2000
             },
             gameRules: `# 末日生存：废土之王\n\n**背景**：2050年，资源枯竭。\n**规则**：\n1. 每回合提交一项决策。\n2. 决策影响生命值、食物和金钱。\n3. 支持玩家间交易。`,
             totalDecisionEntities: 4,

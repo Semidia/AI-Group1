@@ -7,14 +7,14 @@ import { logger } from '../utils/logger';
 const router = express.Router();
 
 // 简单的开发者校验：通过环境变量或硬编码的管理员用户名
-// 支持多个开发者用户名（兼容性）
+// Support multiple developer usernames (for compatibility)
 const isAdminUser = (req: AuthRequest) => {
-  const adminUsername = process.env.ADMIN_USERNAME || '开发者账号';
-  // 支持多个开发者用户名：环境变量指定的、默认的"开发者账号"、以及"developer"
+  const adminUsername = process.env.ADMIN_USERNAME || 'developer';
+  // Support multiple developer usernames: env variable, default 'developer', and legacy '开发者账号'
   const adminUsernames = [
     adminUsername,
-    '开发者账号',
     'developer',
+    '开发者账号', // Legacy support for old data
   ];
   return req.username ? adminUsernames.includes(req.username) : false;
 };

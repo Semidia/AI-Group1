@@ -74,7 +74,6 @@ Test-Step "2.1 Get test user Token (testuser_phase6)" {
     $registerBody = @{
       username = "testuser_phase6"
       password = "Test1234!"
-      email    = "testuser_phase6@example.com"
     } | ConvertTo-Json
     Invoke-WebRequest -Uri "$BaseUrl/api/auth/register" -Method Post -Body $registerBody -ContentType "application/json" -UseBasicParsing | Out-Null
     $loginResp = Invoke-WebRequest -Uri "$BaseUrl/api/auth/login" -Method Post -Body $loginBody -ContentType "application/json" -UseBasicParsing
@@ -134,10 +133,10 @@ $global:SessionId = $null
 Test-Step "4.1 Start game and create session (POST /api/game/{roomId}/start)" {
   $resp = Invoke-WebRequest -Uri "$BaseUrl/api/game/$($global:TestRoomId)/start" -Method Post -Headers $authHeaders -UseBasicParsing
   $json = $resp.Content | ConvertFrom-Json
-  if (-not $json.data -or -not $json.data.sessionId) {
-    throw "data.sessionId field not found in start game response"
+  if (-not $json.data -or -not $json.data.session -or -not $json.data.session.id) {
+    throw "data.session.id field not found in start game response"
   }
-  $global:SessionId = $json.data.sessionId
+  $global:SessionId = $json.data.session.id
 }
 
 Test-Step "4.2 Get session information (GET /api/game/{sessionId})" {
@@ -169,18 +168,11 @@ Test-Step "5.2 Get round 1 decision status (GET /api/game/{sessionId}/round/1/de
 $global:AdminToken = $null
 Test-Step "6.1 Login with developer account (default admin account)" {
   # Use environment variables if available, otherwise use default values
-  # Default username is Chinese "开发者账号" (UTF-8 bytes: E5 BC 80 E5 8F 91 E8 80 85 E8 B4 A6 E5 8F B7)
+  # Default username is 'developer'
   $adminUsername = $env:ADMIN_USERNAME
   if (-not $adminUsername) {
-    # Use UTF-8 byte array to safely set Chinese username (avoids encoding issues)
-    try {
-      $usernameBytes = [byte[]](0xE5,0xBC,0x80,0xE5,0x8F,0x91,0xE8,0x80,0x85,0xE8,0xB4,0xA6,0xE5,0x8F,0xB7)
-      $adminUsername = [System.Text.Encoding]::UTF8.GetString($usernameBytes)
-      Write-Host "  Using default developer username (from byte array)" -ForegroundColor Gray
-    } catch {
-      Write-Host "  Error: Could not set default username. Please set ADMIN_USERNAME environment variable." -ForegroundColor Red
-      throw "Failed to set default admin username"
-    }
+    $adminUsername = 'developer'
+    Write-Host "  Using default developer username: developer" -ForegroundColor Gray
   } else {
     Write-Host "  Using ADMIN_USERNAME from environment variable" -ForegroundColor Gray
   }
@@ -252,7 +244,7 @@ Test-Step "6.1 Login with developer account (default admin account)" {
     Write-Host "       Run: npm run delete-admin (to delete old account)" -ForegroundColor Gray
     Write-Host "       Then restart backend server (to create new account)" -ForegroundColor Gray
     Write-Host "    4. Try manual login test:" -ForegroundColor Gray
-    Write-Host "       `$body = @{username='开发者账号';password='000000'} | ConvertTo-Json" -ForegroundColor Gray
+    Write-Host "       `$body = @{username='developer';password='000000'} | ConvertTo-Json" -ForegroundColor Gray
     Write-Host "       Invoke-WebRequest -Uri 'http://localhost:3000/api/auth/login' -Method Post -Body `$body -ContentType 'application/json'" -ForegroundColor Gray
     
     throw

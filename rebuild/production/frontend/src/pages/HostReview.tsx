@@ -1,25 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import {
-  Card,
-  Button,
-  List,
-  Input,
-  Space,
-  Tag,
-  message,
-  Modal,
-  Descriptions,
-  Divider,
-  Typography,
-  Steps,
-} from 'antd';
+import { useParams } from 'react-router-dom';
+import { Card, Button, List, Input, Space, Tag, message, Modal, Divider, Typography } from 'antd';
 import {
   gameAPI,
   ReviewDecisions,
   ReviewDecisionSummary,
-  TemporaryEvent,
-  TemporaryRule,
 } from '../services/game';
 import { useAuthStore } from '../stores/authStore';
 import { wsService } from '../services/websocket';
@@ -28,12 +13,9 @@ import { useMessageRouter } from '../hooks/useMessageRouter';
 
 const { TextArea } = Input;
 const { Title, Text } = Typography;
-const { Step } = Steps;
-
 function HostReviewPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
-  const navigate = useNavigate();
-  const { user } = useAuthStore();
+  useAuthStore(); // 预留，如需权限判断可获取 user
   const socketStatus = useSocket();
   useMessageRouter();
 
@@ -52,14 +34,26 @@ function HostReviewPage() {
   const [ruleContent, setRuleContent] = useState('');
   const [ruleRounds, setRuleRounds] = useState(1);
 
-  const loadReviewData = async () => {
-    if (!sessionId || !reviewData?.round) return;
+  const renderJson = (value: unknown): string => String(JSON.stringify(value ?? '', null, 2));
+
+  const loadReviewData = async (round?: number) => {
+    if (!sessionId) return;
+
     try {
       setLoading(true);
-      const data = await gameAPI.getReviewDecisions(sessionId, reviewData.round);
+
+      // 规范化回合号，避免传入对象导致 [object Object]
+      let targetRound = Number(round ?? reviewData?.round);
+      if (!Number.isFinite(targetRound) || targetRound <= 0) {
+        const session = await gameAPI.getSession(sessionId);
+        targetRound = session.currentRound;
+      }
+
+      const data = await gameAPI.getReviewDecisions(sessionId, targetRound);
       setReviewData(data);
     } catch (err: any) {
-      message.error(err?.response?.data?.message || '获取审核数据失败');
+      message.error(err?.response?.data?.message || err?.message || '获取审核数据失败');
+      console.error('Failed to load review data:', err);
     } finally {
       setLoading(false);
     }
@@ -67,20 +61,8 @@ function HostReviewPage() {
 
   useEffect(() => {
     if (!sessionId) return;
-    // 初始加载时，需要先获取会话信息来确定当前回合
-    gameAPI
-      .getSession(sessionId)
-      .then(session => {
-        // 假设当前回合就是需要审核的回合
-        return gameAPI.getReviewDecisions(sessionId, session.currentRound);
-      })
-      .then(data => {
-        setReviewData(data);
-      })
-      .catch(err => {
-        message.error('获取审核数据失败');
-        console.error(err);
-      });
+    // 初始加载
+    loadReviewData();
   }, [sessionId]);
 
   useEffect(() => {
@@ -96,22 +78,57 @@ function HostReviewPage() {
       ) {
         return;
       }
+      // 重新加载审核数据
       loadReviewData();
     };
+    
+    const handleStageChanged = (payload: unknown) => {
+      if (
+        !payload ||
+        typeof payload !== 'object' ||
+        !('sessionId' in payload) ||
+        (payload as { sessionId?: string }).sessionId !== sessionId
+      ) {
+        return;
+      }
+      const stageData = payload as { stage?: string; round?: number };
+      // 如果阶段变为review，重新加载数据
+      if (stageData.stage === 'review') {
+        loadReviewData(stageData.round);
+      }
+    };
+
+    const reload = () => loadReviewData();
 
     wsService.on('round_stage_changed', handleRoundStageChanged);
-    wsService.on('temporary_event_added', () => loadReviewData());
-    wsService.on('temporary_rule_added', () => loadReviewData());
-    wsService.on('inference_started', () => {
+    wsService.on('stage_changed', handleStageChanged);
+    wsService.on('temporary_event_added', reload);
+    wsService.on('temporary_rule_added', reload);
+    wsService.on('inference_started', (payload: any) => {
       message.info('AI推演已开始');
-      // 可以跳转到推演结果页面
+      if (sessionId && payload?.round) {
+        // 跳转到推演结果页，便于主持人查看进度
+        window.setTimeout(() => {
+          window.location.href = `/game/${sessionId}/round/${payload.round}/inference`;
+        }, 300);
+      }
+    });
+    wsService.on('inference_completed', (payload: any) => {
+      if (sessionId && payload?.round) {
+        message.success('AI推演完成，正在打开结果页');
+        window.setTimeout(() => {
+          window.location.href = `/game/${sessionId}/round/${payload.round}/inference`;
+        }, 200);
+      }
     });
 
     return () => {
       wsService.off('round_stage_changed', handleRoundStageChanged);
-      wsService.off('temporary_event_added', loadReviewData);
-      wsService.off('temporary_rule_added', loadReviewData);
+      wsService.off('stage_changed', handleStageChanged);
+      wsService.off('temporary_event_added', reload);
+      wsService.off('temporary_rule_added', reload);
       wsService.off('inference_started', () => {});
+      wsService.off('inference_completed', () => {});
     };
   }, [sessionId]);
 
@@ -171,11 +188,13 @@ function HostReviewPage() {
 
     try {
       setLoading(true);
-      const result = await gameAPI.submitToAI(sessionId, reviewData.round);
-      message.success('已提交给AI推演');
+      await gameAPI.submitToAI(sessionId, reviewData.round);
+      message.success('已提交给AI推演，正在跳转到推演结果/进度页');
+      // 跳转到推演结果页，便于实时查看进度
+      window.setTimeout(() => {
+        window.location.href = `/game/${sessionId}/round/${reviewData.round}/inference`;
+      }, 200);
       setSubmitModalVisible(false);
-      // 可以显示推演数据预览
-      console.log('推演数据:', result.inferenceData);
     } catch (err: any) {
       message.error(err?.response?.data?.message || '提交推演失败');
     } finally {
@@ -206,7 +225,7 @@ function HostReviewPage() {
 
           <Divider />
 
-          <Card title="决策列表" extra={<Button onClick={loadReviewData}>刷新</Button>}>
+          <Card title="决策列表" extra={<Button onClick={() => loadReviewData()}>刷新</Button>}>
             <List
               dataSource={reviewData.actions}
               loading={loading}
@@ -231,16 +250,16 @@ function HostReviewPage() {
                             <Text>{action.actionText}</Text>
                           </div>
                         )}
-                        {action.selectedOptionIds && (
+                        {Boolean(action.selectedOptionIds) && (
                           <div>
                             <Text strong>选项ID:</Text>
-                            <Text code>{JSON.stringify(action.selectedOptionIds)}</Text>
+                            <Text code>{renderJson(action.selectedOptionIds)}</Text>
                           </div>
                         )}
-                        {action.hostModification && (
+                        {Boolean(action.hostModification) && (
                           <div>
                             <Text strong>主持人修改:</Text>
-                            <Text code>{JSON.stringify(action.hostModification)}</Text>
+                            <Text code>{renderJson(action.hostModification)}</Text>
                           </div>
                         )}
                         <div>

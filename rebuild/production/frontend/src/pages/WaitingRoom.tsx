@@ -15,7 +15,7 @@ const statusColor: Record<string, string> = {
 
 interface RoomRealtimeState {
   roomId: string;
-  players: string[];
+  players?: string[]; // 添加可选标记，因为可能为undefined
   status: string;
 }
 
@@ -71,6 +71,21 @@ function WaitingRoom() {
       ) {
         const safeState = state as RoomRealtimeState;
         setRealtimeState(safeState);
+        
+        // 如果游戏状态变为playing且有sessionId，自动跳转到游戏页面
+        if (
+          safeState.status === 'playing' &&
+          'sessionId' in state &&
+          (state as { sessionId?: string }).sessionId
+        ) {
+          const sessionId = (state as { sessionId?: string }).sessionId;
+          if (sessionId) {
+            message.success('游戏已开始，正在跳转...');
+            setTimeout(() => {
+              navigate(`/game/${sessionId}`);
+            }, 500);
+          }
+        }
       }
     };
 
@@ -101,19 +116,42 @@ function WaitingRoom() {
     wsService.send('join_room', { roomId });
     wsService.send('sync_state', { roomId });
 
+    const handleGameStarted = (payload: unknown) => {
+      if (
+        payload &&
+        typeof payload === 'object' &&
+        'roomId' in payload &&
+        (payload as { roomId?: string }).roomId === roomId &&
+        'sessionId' in payload &&
+        (payload as { sessionId?: string }).sessionId
+      ) {
+        const sessionId = (payload as { sessionId?: string }).sessionId;
+        if (sessionId) {
+          message.success('游戏已开始，正在跳转...');
+          setTimeout(() => {
+            navigate(`/game/${sessionId}`);
+          }, 500);
+        }
+      }
+    };
+
     wsService.on('player_joined', refresh);
     wsService.on('player_left', refresh);
     wsService.on('system_message', handleSystemMessage);
     wsService.on('game_state_update', handleGameStateUpdate);
+    wsService.on('game_started', handleGameStarted);
     wsService.on('error', handleError);
 
     return () => {
-      wsService.send('leave_room', { roomId });
+      // 不要自动离开房间，因为用户可能只是暂时离开页面
+      // 只在用户明确点击"离开房间"按钮时才离开
+      // wsService.send('leave_room', { roomId });
       wsService.untrackRoom(roomId);
       wsService.off('player_joined', refresh);
       wsService.off('player_left', refresh);
       wsService.off('system_message', handleSystemMessage);
       wsService.off('game_state_update', handleGameStateUpdate);
+      wsService.off('game_started', handleGameStarted);
       wsService.off('error', handleError);
     };
   }, [token, roomId, loadRooms]);
@@ -168,7 +206,7 @@ function WaitingRoom() {
             <Descriptions column={1} size="small" bordered>
               <Descriptions.Item label="房间名">{currentRoom.name}</Descriptions.Item>
               <Descriptions.Item label="人数">
-                {realtimeState
+                {realtimeState && realtimeState.players
                   ? `${realtimeState.players.length}/${currentRoom.maxPlayers}`
                   : `${currentRoom.currentPlayers}/${currentRoom.maxPlayers}`}
               </Descriptions.Item>

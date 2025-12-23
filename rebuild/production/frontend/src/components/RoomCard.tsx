@@ -13,11 +13,12 @@ interface RoomCardProps {
   onJoin: (roomId: string) => void;
   onLeave: (roomId: string) => void;
   onClose?: (roomId: string) => void;
+  onKillGame?: (roomId: string) => void;
   isHost?: boolean;
   loading?: boolean;
 }
 
-export function RoomCard({ room, onJoin, onLeave, onClose, isHost, loading }: RoomCardProps) {
+export function RoomCard({ room, onJoin, onLeave, onClose, onKillGame, isHost, loading }: RoomCardProps) {
   const hostLabel = room.hostName || room.hostId || '未知房主';
   const isFull = room.currentPlayers >= room.maxPlayers;
   const isPlaying = room.status === 'playing';
@@ -57,7 +58,18 @@ export function RoomCard({ room, onJoin, onLeave, onClose, isHost, loading }: Ro
               离开
             </Button>
           )}
-          {isHost && onClose && (
+          {isHost && isPlaying && onKillGame && (
+            <Button
+              size="small"
+              danger
+              loading={loading}
+              onClick={() => onKillGame(room.id)}
+              title="终止进行中的游戏"
+            >
+              终止游戏
+            </Button>
+          )}
+          {isHost && onClose && !isPlaying && (
             <Button
               size="small"
               danger

@@ -65,8 +65,6 @@ Test-Step "2.1 Get user Token (testuser_trade1)" {
   $body = @{
     username = "testuser_trade1"
     password = "test123456"
-    email    = "trade1@test.com"
-    nickname = "Trade User 1"
   } | ConvertTo-Json
 
   try {
@@ -91,8 +89,6 @@ Test-Step "2.2 Get user Token (testuser_trade2)" {
   $body = @{
     username = "testuser_trade2"
     password = "test123456"
-    email    = "trade2@test.com"
-    nickname = "Trade User 2"
   } | ConvertTo-Json
 
   try {

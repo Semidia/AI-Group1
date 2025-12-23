@@ -4,6 +4,7 @@ import { AppError } from '../middleware/errorHandler';
 import prisma from '../utils/db';
 import { logger } from '../utils/logger';
 import { io } from '../server';
+import redis from '../utils/redis';
 
 const router = Router();
 
@@ -81,6 +82,12 @@ router.post('/create', authenticateToken, async (req: AuthRequest, res, next) =>
     const { name, max_players, maxPlayers, game_mode, gameMode, password } = req.body || {};
     const userId = req.userId;
     if (!userId) throw new AppError('Unauthorized', 401);
+
+    // Verify user exists in database
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new AppError('用户不存在，请重新登录', 401);
+    }
 
     const roomName = (name || '').trim();
     if (!roomName) throw new AppError('房间名称不能为空', 400);
@@ -219,6 +226,12 @@ router.post('/:roomId/join', authenticateToken, async (req: AuthRequest, res, ne
   try {
     const userId = req.userId;
     if (!userId) throw new AppError('Unauthorized', 401);
+
+    // Verify user exists in database
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new AppError('用户不存在，请重新登录', 401);
+    }
 
     const { roomId } = req.params;
     const { password } = req.body || {};
@@ -387,6 +400,192 @@ router.post('/:roomId/close', authenticateToken, async (req: AuthRequest, res, n
     }
 
     res.json({ code: 200, message: '房间已关闭', data: { room_id: roomId, status: 'closed' } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/rooms/:roomId/kill-game
+ * 终止进行中的游戏（仅房主可操作）
+ */
+router.post('/:roomId/kill-game', authenticateToken, async (req: AuthRequest, res, next) => {
+  try {
+    const userId = req.userId;
+    if (!userId) throw new AppError('Unauthorized', 401);
+    const { roomId } = req.params;
+
+    const room = await ensureRoomHost(roomId, userId);
+
+    // 只有进行中的房间才能终止
+    if (room.status !== 'playing') {
+      throw new AppError('房间未在进行中，无法终止游戏', 400);
+    }
+
+    // 查找并终止游戏会话
+    const session = await prisma.gameSession.findUnique({
+      where: { roomId },
+    });
+
+    // 执行事务：更新游戏会话和房间状态
+    const transactionOps: any[] = [
+      // 将房间状态改回等待中
+      prisma.room.update({
+        where: { id: roomId },
+        data: {
+          status: 'waiting',
+        },
+      }),
+    ];
+
+    // 如果有会话，添加更新会话的操作
+    if (session) {
+      transactionOps.push(
+        prisma.gameSession.update({
+          where: { id: session.id },
+          data: {
+            status: 'finished',
+            roundStatus: 'finished',
+          },
+        })
+      );
+    }
+
+    await prisma.$transaction(transactionOps);
+
+    // 清理Redis中的推演任务和结果
+    if (session) {
+      try {
+        const roundKeys = await redis.keys(`inference:*:${session.id}:*`);
+        if (roundKeys.length > 0) {
+          await redis.del(...roundKeys);
+        }
+      } catch (redisErr) {
+        logger.warn('Failed to clean up Redis keys:', redisErr);
+      }
+    }
+
+    // 广播游戏终止通知
+    try {
+      io.to(roomId).emit('system_message', {
+        roomId,
+        message: '游戏已被房主终止',
+        from: 'system',
+      });
+      io.to(roomId).emit('game_state_update', {
+        roomId,
+        status: 'waiting',
+      });
+      if (session) {
+        io.to(roomId).emit('game_finished', {
+          sessionId: session.id,
+          reason: 'terminated_by_host',
+        });
+      }
+    } catch (emitErr) {
+      logger.warn('emit game killed events failed', emitErr);
+    }
+
+    res.json({
+      code: 200,
+      message: '游戏已终止',
+      data: { room_id: roomId, status: 'waiting' },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/rooms/:roomId/reset-game
+ * 重置房间：清空该房间的游戏会话及相关数据（仅房主可操作）
+ */
+router.post('/:roomId/reset-game', authenticateToken, async (req: AuthRequest, res, next) => {
+  try {
+    const userId = req.userId;
+    if (!userId) throw new AppError('Unauthorized', 401);
+    const { roomId } = req.params;
+
+    const room = await ensureRoomHost(roomId, userId);
+
+    // 查找当前会话
+    const session = await prisma.gameSession.findUnique({
+      where: { roomId },
+      select: { id: true },
+    });
+
+    // 如果没有会话，仅将房间状态复位
+    if (!session) {
+      await prisma.room.update({
+        where: { id: roomId },
+        data: {
+          status: 'waiting',
+        },
+      });
+
+      io.to(roomId).emit('system_message', {
+        roomId,
+        message: '房间已重置（无进行中的会话）',
+        from: 'system',
+      });
+      io.to(roomId).emit('game_state_update', {
+        roomId,
+        status: 'waiting',
+      });
+
+      return res.json({ code: 200, message: '房间已重置', data: { room_id: roomId, status: 'waiting' } });
+    }
+
+    const sessionId = session.id;
+
+    // 事务删除会话相关数据
+    await prisma.$transaction([
+      prisma.playerAction.deleteMany({ where: { sessionId } }),
+      prisma.temporaryEvent.deleteMany({ where: { sessionId } }),
+      prisma.trade.deleteMany({ where: { sessionId } }),
+      prisma.task.deleteMany({ where: { sessionId } }),
+      prisma.gameSave.deleteMany({ where: { sessionId } }),
+      prisma.gameSession.deleteMany({ where: { id: sessionId } }),
+      prisma.room.update({
+        where: { id: roomId },
+        data: {
+          status: 'waiting',
+          startedAt: null,
+          finishedAt: null,
+        },
+      }),
+    ]);
+
+    // 清理 Redis 推演缓存
+    try {
+      const keys = await redis.keys(`inference:*:${sessionId}:*`);
+      if (keys.length > 0) {
+        await redis.del(...keys);
+      }
+    } catch (redisErr) {
+      logger.warn('Failed to clean up Redis keys on reset', redisErr);
+    }
+
+    // 广播重置通知
+    try {
+      io.to(roomId).emit('system_message', {
+        roomId,
+        message: '房间已被重置，所有游戏数据已清空',
+        from: 'system',
+      });
+      io.to(roomId).emit('game_state_update', {
+        roomId,
+        status: 'waiting',
+      });
+      io.to(roomId).emit('game_finished', {
+        sessionId,
+        reason: 'reset_by_host',
+      });
+    } catch (emitErr) {
+      logger.warn('emit room reset events failed', emitErr);
+    }
+
+    res.json({ code: 200, message: '房间已重置，游戏数据已清空', data: { room_id: roomId, status: 'waiting' } });
   } catch (error) {
     next(error);
   }

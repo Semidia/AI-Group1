@@ -16,6 +16,7 @@
     "check:db": "npx tsx scripts/check-db.ts",
     "check:developer": "npx tsx scripts/check-developer.ts",
     "cleanup:db": "npx tsx scripts/cleanup-database.ts",
+    "reset:db": "npx tsx scripts/reset-database.ts",
     "seed": "npx tsx scripts/seed.ts",
     "delete-admin": "npx tsx scripts/delete-admin.ts",
     "test": "jest",

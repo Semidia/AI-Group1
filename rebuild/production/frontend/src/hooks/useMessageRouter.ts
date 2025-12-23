@@ -104,6 +104,20 @@ export function useMessageRouter() {
         },
       ],
       [
+        'inference_failed',
+        payload => {
+          const data = payload as { error?: string; details?: string; sessionId?: string; round?: number };
+          const errorMsg = data.error || '推演失败';
+          showError(`推演失败: ${errorMsg}`);
+          console.error('inference_failed', payload);
+          
+          // 如果是API连接错误，提供更详细的提示
+          if (errorMsg.includes('API') || errorMsg.includes('连接') || errorMsg.includes('密钥')) {
+            showWarning('请检查AI API配置：服务提供商、API端点、API密钥是否正确');
+          }
+        },
+      ],
+      [
         'decision_options_ready',
         payload => {
           showSuccess('决策选项已生成');

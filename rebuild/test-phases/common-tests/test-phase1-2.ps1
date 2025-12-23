@@ -107,7 +107,6 @@ Write-Host ""
 
 $phase2Passed = $true
 $testUsername = "testuser_$(Get-Random -Minimum 1000 -Maximum 9999)"
-$testEmail = "test_$(Get-Random -Minimum 1000 -Maximum 9999)@example.com"
 $testPassword = "password123"
 $token = $null
 
@@ -116,7 +115,6 @@ Write-Host "2.1 Testing user registration..." -ForegroundColor Yellow
 try {
     $registerData = @{
         username = $testUsername
-        email = $testEmail
         password = $testPassword
     } | ConvertTo-Json
 
@@ -129,7 +127,6 @@ try {
         $token = $registerResponse.data.token
         Write-Host "   ✓ Registration successful" -ForegroundColor Green
         Write-Host "     Username: $testUsername" -ForegroundColor Gray
-        Write-Host "     Email: $testEmail" -ForegroundColor Gray
     } else {
         Write-Host "   ✗ Registration failed: $($registerResponse.message)" -ForegroundColor Red
         $phase2Passed = $false
@@ -188,7 +185,9 @@ try {
         Write-Host "   ✓ Get user info successful" -ForegroundColor Green
         Write-Host "     User ID: $($userInfoResponse.data.id)" -ForegroundColor Gray
         Write-Host "     Username: $($userInfoResponse.data.username)" -ForegroundColor Gray
-        Write-Host "     Email: $($userInfoResponse.data.email)" -ForegroundColor Gray
+        if ($userInfoResponse.data.nickname) {
+            Write-Host "     Nickname: $($userInfoResponse.data.nickname)" -ForegroundColor Gray
+        }
     } else {
         Write-Host "   ✗ Get user info failed" -ForegroundColor Red
         $phase2Passed = $false
@@ -244,29 +243,9 @@ try {
 
 Write-Host ""
 
-# Test 6: Forgot password
+# Test 6: Forgot password (skipped - endpoint removed in backend)
 Write-Host "2.6 Testing forgot password..." -ForegroundColor Yellow
-try {
-    $forgotPasswordData = @{
-        email = $testEmail
-    } | ConvertTo-Json
-
-    $forgotPasswordResponse = Invoke-RestMethod -Uri "$API_BASE/auth/forgot-password" `
-        -Method Post `
-        -Body $forgotPasswordData `
-        -ContentType "application/json"
-
-    if ($forgotPasswordResponse.code -eq 200) {
-        Write-Host "   ✓ Forgot password request successful" -ForegroundColor Green
-        if ($forgotPasswordResponse.resetToken) {
-            Write-Host "     Reset Token: $($forgotPasswordResponse.resetToken)" -ForegroundColor Gray
-        }
-    } else {
-        Write-Host "   ✗ Forgot password request failed" -ForegroundColor Red
-    }
-} catch {
-    Write-Host "   ✗ Forgot password request failed: $($_.Exception.Message)" -ForegroundColor Red
-}
+Write-Host "   ⚠ Forgot password endpoint has been removed from backend, skipping test" -ForegroundColor Yellow
 
 Write-Host ""
 
@@ -316,7 +295,6 @@ if ($phase1Passed -and $phase2Passed) {
     Write-Host ""
     Write-Host "Test account information:" -ForegroundColor Yellow
     Write-Host "  Username: $testUsername" -ForegroundColor Gray
-    Write-Host "  Email: $testEmail" -ForegroundColor Gray
     Write-Host "  Password: $testPassword" -ForegroundColor Gray
     Write-Host ""
     Write-Host "Please perform manual testing in the frontend interface:" -ForegroundColor Yellow

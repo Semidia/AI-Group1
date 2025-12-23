@@ -53,7 +53,6 @@ Test-Step "2.1 Get test user Token" {
     $registerBody = @{
       username = "testuser_phase5"
       password = "Test1234!"
-      email    = "testuser_phase5@example.com"
     } | ConvertTo-Json
     Invoke-WebRequest -Uri "$BaseUrl/api/auth/register" -Method Post -Body $registerBody -ContentType "application/json" -UseBasicParsing | Out-Null
     $loginResp = Invoke-WebRequest -Uri "$BaseUrl/api/auth/login" -Method Post -Body $loginBody -ContentType "application/json" -UseBasicParsing

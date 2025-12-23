@@ -1,38 +1,51 @@
 @echo off
-chcp 65001 >nul
-title AI-Group1 一键启动器
-
-REM 确定项目根目录的绝对路径，处理可能存在的空格
-set "BATCH_DIR=%~dp0"
-set "CORE_SCRIPT=%BATCH_DIR%tools\run-dev.ps1"
+chcp 65001 >nul 2>&1
+title Development Environment Launcher
+color 0A
 
 echo ========================================
-echo 开发环境启动脚本 (环境一致性自检)
+echo Development Environment Launcher
 echo ========================================
 echo.
 
-REM 简单存在性检查
-if not exist "%CORE_SCRIPT%" (
-    echo [错误] 找不到核心启动脚本！
-    echo 期待路径: "%CORE_SCRIPT%"
+REM Switch to the directory where this batch file is located (project root)
+cd /d "%~dp0"
+echo Current directory: %CD%
+echo.
+
+REM Check if PowerShell script exists
+if not exist "tools\run-dev.ps1" (
+    echo [ERROR] tools\run-dev.ps1 not found!
+    echo.
+    echo Please make sure you are running this from the project root directory.
+    echo Expected path: %CD%\tools\run-dev.ps1
     echo.
     pause
     exit /b 1
 )
 
-echo [1/3] 正在调起核心逻辑...
+echo [INFO] Found PowerShell script: tools\run-dev.ps1
+echo [INFO] Starting PowerShell script...
+echo.
 
-REM 优先尝试 pwsh (PowerShell 7)，因为其对中文编码支持更佳
-where pwsh >nul 2>&1
-if %ERRORLEVEL% equ 0 (
-    pwsh.exe -NoProfile -ExecutionPolicy Bypass -File "%CORE_SCRIPT%"
+REM Use PowerShell to execute script with error handling
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& { $ErrorActionPreference = 'Stop'; try { & '%~dp0tools\run-dev.ps1' } catch { Write-Host \"[ERROR] Script execution failed: $_\" -ForegroundColor Red; exit 1 } }"
+
+set EXIT_CODE=%ERRORLEVEL%
+
+echo.
+echo ========================================
+if %EXIT_CODE% EQU 0 (
+    echo Script completed successfully
 ) else (
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%CORE_SCRIPT%"
-)
-
-if %ERRORLEVEL% neq 0 (
+    echo Script failed with error code: %EXIT_CODE%
     echo.
-    echo [错误] 执行过程中发生异常，请检查控制台输出 (Error Code: %ERRORLEVEL%)
-    echo.
-    pause
+    echo Common issues:
+    echo   1. Check if Node.js is installed: node -v
+    echo   2. Check if Docker is running (if needed)
+    echo   3. Check PowerShell execution policy
+    echo   4. Try running manually: powershell -ExecutionPolicy Bypass -File tools\run-dev.ps1
 )
+echo ========================================
+echo.
+pause

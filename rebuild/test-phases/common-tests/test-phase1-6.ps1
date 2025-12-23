@@ -8,12 +8,9 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
 # Set environment variables for Phase 6 test (developer account)
-# This avoids encoding issues with Chinese characters in PowerShell scripts
-# Use UTF-8 byte array to safely set Chinese username
+# Default username is 'developer'
 if (-not $env:ADMIN_USERNAME) {
-  # UTF-8 bytes for "开发者账号": [0xE5,0xBC,0x80,0xE5,0x8F,0x91,0xE8,0x80,0x85,0xE8,0xB4,0xA6,0xE5,0x8F,0xB7]
-  $usernameBytes = [byte[]](0xE5,0xBC,0x80,0xE5,0x8F,0x91,0xE8,0x80,0x85,0xE8,0xB4,0xA6,0xE5,0x8F,0xB7)
-  $env:ADMIN_USERNAME = [System.Text.Encoding]::UTF8.GetString($usernameBytes)
+  $env:ADMIN_USERNAME = 'developer'
 }
 if (-not $env:ADMIN_DEFAULT_PASSWORD) {
   $env:ADMIN_DEFAULT_PASSWORD = "000000"

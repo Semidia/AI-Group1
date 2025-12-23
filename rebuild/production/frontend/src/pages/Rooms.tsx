@@ -181,6 +181,20 @@ function Rooms() {
     }
   };
 
+  const handleKillGame = async (roomId: string) => {
+    setActionRoomId(roomId);
+    try {
+      await roomAPI.killGame(roomId);
+      message.success('游戏已终止');
+      wsService.untrackRoom(roomId);
+      loadRooms();
+    } catch (err) {
+      message.error(getErrMsg(err, '终止游戏失败'));
+    } finally {
+      setActionRoomId(null);
+    }
+  };
+
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
       <Card title="创建房间">
@@ -237,6 +251,7 @@ function Rooms() {
                   onJoin={handleJoin}
                   onLeave={handleLeave}
                   onClose={handleClose}
+                  onKillGame={handleKillGame}
                   isHost={room.hostId === user?.userId}
                   loading={actionRoomId === room.id || loading}
                 />
