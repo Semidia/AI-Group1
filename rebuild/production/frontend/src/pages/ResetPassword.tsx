@@ -1,5 +1,5 @@
 import { Form, Input, Button, Card, message } from 'antd';
-import { LockOutlined } from '@ant-design/icons';
+import { LockOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { authAPI } from '../services/auth';
@@ -56,7 +56,22 @@ function ResetPassword() {
         minHeight: '100vh',
       }}
     >
-      <Card title="重置密码" style={{ width: 400 }}>
+      <Card 
+        title={
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <Button 
+              type="text" 
+              icon={<ArrowLeftOutlined />} 
+              onClick={() => navigate(-1)} 
+              style={{ marginRight: 16 }}
+            >
+              返回
+            </Button>
+            <span>重置密码</span>
+          </div>
+        } 
+        style={{ width: 400 }}
+      >
         <Form name="reset-password" onFinish={onFinish} autoComplete="off">
           <Form.Item
             name="password"

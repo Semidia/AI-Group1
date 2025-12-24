@@ -21,6 +21,7 @@ import {
   CloseOutlined,
   DeleteOutlined,
   ClockCircleOutlined,
+  ArrowLeftOutlined,
 } from '@ant-design/icons';
 import { getTradeList, requestTrade, respondToTrade, cancelTrade, Trade } from '../services/trade';
 import { useAuthStore } from '../stores/authStore';
@@ -255,9 +256,19 @@ const TradePage: React.FC = () => {
       <Card>
         <Space direction="vertical" style={{ width: '100%' }} size="large">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Title level={2}>
-              <SwapOutlined /> 资源交易
-            </Title>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <Button
+                type="text"
+                icon={<ArrowLeftOutlined />}
+                onClick={() => navigate(-1)}
+                style={{ marginRight: 16 }}
+              >
+                返回
+              </Button>
+              <Title level={2}>
+                <SwapOutlined /> 资源交易
+              </Title>
+            </div>
             <Button
               type="primary"
               className="btn-strong glow"

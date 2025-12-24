@@ -22,6 +22,7 @@ import {
   DeleteOutlined,
   EyeOutlined,
   ReloadOutlined,
+  ArrowLeftOutlined,
 } from '@ant-design/icons';
 import { gameAPI } from '../services/game';
 import { useNavigate } from 'react-router-dom';
@@ -182,7 +183,17 @@ function GameHistoryPage() {
   useEffect(() => {
     loadHistory(1, statusFilter);
     loadStatistics();
-  }, [statusFilter]);
+    
+    // 添加定时刷新，每15秒刷新一次历史记录
+    const refreshInterval = setInterval(() => {
+      loadHistory(pagination.page, statusFilter);
+      loadStatistics();
+    }, 15000);
+
+    return () => {
+      clearInterval(refreshInterval);
+    };
+  }, [statusFilter, pagination.page]);
 
   const inferMedalCategory = (title: string, description: string): HonorMedal['category'] => {
     const text = `${title}${description}`;
@@ -513,6 +524,15 @@ function GameHistoryPage() {
     <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
       <Card>
         <Space direction="vertical" style={{ width: '100%' }} size="large">
+          {/* 返回按钮 */}
+          <Button 
+            type="primary" 
+            icon={<ArrowLeftOutlined />} 
+            onClick={() => navigate(-1)} 
+            style={{ alignSelf: 'flex-start' }}
+          >
+            返回
+          </Button>
           {/* 统计信息 */}
           {statistics && (
             <Card title="统计信息" size="small">

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Form, Input, InputNumber, Space, Tag, message, Empty } from 'antd';
+import { ArrowLeftOutlined } from '@ant-design/icons';
 import { roomAPI, RoomSummary } from '../services/rooms';
 import { wsService } from '../services/websocket';
 import { useAuthStore } from '../stores/authStore';
@@ -46,6 +47,14 @@ function Rooms() {
 
   useEffect(() => {
     loadRooms();
+    // 添加定时刷新，每10秒刷新一次房间列表
+    const refreshInterval = setInterval(() => {
+      loadRooms();
+    }, 10000);
+
+    return () => {
+      clearInterval(refreshInterval);
+    };
   }, [loadRooms]);
 
   useEffect(() => {
@@ -213,6 +222,17 @@ function Rooms() {
     <div className="rooms-shell">
       <div className="grid-lines" />
       <div className="rooms-content">
+        <div className="rooms-header" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Button
+            type="text"
+            icon={<ArrowLeftOutlined />}
+            onClick={() => navigate('/')}
+            style={{ marginRight: 16 }}
+          >
+            返回
+          </Button>
+          <h1 className="rooms-title" style={{ margin: 0 }}>游戏房间</h1>
+        </div>
         <div className="card-plate">
           <div className="rooms-header" style={{ marginBottom: 16 }}>
             <div className="rooms-title">创建房间</div>

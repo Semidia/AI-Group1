@@ -1,5 +1,5 @@
-import { Button, Typography, Form, Input, Card, message } from 'antd';
-import { UserOutlined, LockOutlined, LoginOutlined } from '@ant-design/icons';
+import { Button, Typography, Space, Form, Input, Card, message } from 'antd';
+import { UserOutlined, LockOutlined, LoginOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { authAPI } from '../services/auth';
@@ -44,6 +44,31 @@ function Login() {
     >
       <div className="grid-lines" />
       <div className="home-content">
+        <header className="home-topbar">
+        <Button 
+          type="text" 
+          icon={<ArrowLeftOutlined />} 
+          onClick={() => navigate(-1)} 
+          style={{ marginRight: 16 }}
+        >
+          返回
+        </Button>
+        <div className="brand-pill">
+          <span className="brand-dot" />            <span className="brand-name">凡墙皆是门</span>
+        </div>
+          {user && (
+            <Space align="center" size="middle">
+              <span className="user-pill">
+                <Text>当前用户：</Text>
+                <Text strong>{user.nickname || user.username}</Text>
+              </span>
+              <Button size="small" onClick={logout} className="logout-btn">
+                退出登录
+              </Button>
+            </Space>
+          )}
+        </header>
+
         <div className="hero-left glass-surface">
           <div className="hero-pill" style={{ marginBottom: 12 }}>
             <span className="pill-dot" />
