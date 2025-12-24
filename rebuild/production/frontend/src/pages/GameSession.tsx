@@ -24,6 +24,7 @@ import LeaderboardPanel from '../components/LeaderboardPanel';
 import AssessmentCards from '../components/AssessmentCards';
 import HexagramDisplay from '../components/HexagramDisplay';
 import { AchievementManager } from '../components/AchievementPopup';
+import { HelpButton } from '../components/HelpButton';
 import type { TurnResultDTO, TurnAchievement, TurnHexagram } from '../types/turnResult';
 
 const { TextArea } = Input;
@@ -102,6 +103,39 @@ function GameSessionPage() {
     const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // 定期同步会话状态和决策列表
+  useEffect(() => {
+    if (!sessionId) return;
+    
+    const syncInterval = setInterval(() => {
+      // 使用异步函数来避免依赖问题
+      (async () => {
+        try {
+          const data = await gameAPI.getSession(sessionId);
+          setSession(data);
+          
+          if (data.hostId && user?.id && data.hostId === user.id) {
+            navigate(`/game/${sessionId}/state`, { replace: true });
+          }
+        } catch (err) {
+          console.error('同步会话信息失败:', err);
+        }
+      })();
+      
+      (async () => {
+        if (!session?.currentRound) return;
+        try {
+          const data = await gameAPI.getRoundDecisions(sessionId, session.currentRound);
+          setDecisions(data.actions);
+        } catch (err) {
+          // 忽略初始空数据
+        }
+      })();
+    }, 3000); // 每3秒同步一次
+    
+    return () => clearInterval(syncInterval);
+  }, [sessionId, user?.id, navigate, session?.currentRound]);
 
   const loadSession = useMemo(
     () => async () => {
@@ -232,23 +266,37 @@ function GameSessionPage() {
       }
     };
 
+    // 时限调整事件
+    const handleTimeLimitAdjusted = (payload: any) => {
+      if (payload.sessionId === sessionId) {
+        setSession(prev => prev ? { 
+          ...prev, 
+          decisionDeadline: payload.newDeadline 
+        } : prev);
+        message.info(`时限已延长${payload.additionalMinutes}分钟`);
+      }
+    };
+
     wsService.on('decision_status_update', handleDecisionStatusUpdate);
     wsService.on('game_state_update', handleGameStateUpdate);
     wsService.on('achievement_unlocked', handleAchievementUnlocked);
+    wsService.on('time_limit_adjusted', handleTimeLimitAdjusted);
 
     return () => {
       wsService.setActiveSession(null);
       wsService.off('decision_status_update', handleDecisionStatusUpdate);
       wsService.off('game_state_update', handleGameStateUpdate);
       wsService.off('achievement_unlocked', handleAchievementUnlocked);
+      wsService.off('time_limit_adjusted', handleTimeLimitAdjusted);
     };
   }, [sessionId, loadDecisions, loadTurnResult, navigate, handleAchievementUnlock]);
 
   const handleSubmitDecision = async () => {
     if (!sessionId || !session) return;
     
-    // 检查是否超时（仅限制玩家提交，主持人提交给AI不受此限制）
-    if (isTimeout) {
+    // 检查是否超时（仅限制玩家提交，主持人不受此限制）
+    const isHost = session.hostId && user?.id && session.hostId === user.id;
+    if (isTimeout && !isHost) {
       message.error('当前回合决策已超时，无法提交');
       return;
     }
@@ -412,22 +460,36 @@ function GameSessionPage() {
         <div className="max-w-6xl mx-auto h-screen max-h-[900px] flex flex-col gap-4">
           <header className="flex items-center justify-between">
             <div className="flex flex-col">
-              <span className="text-[10px] uppercase tracking-[0.35em] text-slate-500">
-                Advanced session view
+              <span className="text-[10px] uppercase tracking-[0.35em] text-slate-400">
+                高级视图控制台
               </span>
               <h1 className="mt-1 text-lg font-semibold text-slate-100">
-                Game console for session {sessionId}
+                游戏会话 {sessionId?.slice(-8)} - 第{session.currentRound}回合
               </h1>
             </div>
-            <div className="flex items-center gap-2 text-xs text-slate-400">
-              <span className="font-mono">ROUND {session.currentRound}</span>
-              <span className="h-1 w-1 rounded-full bg-emerald-500 shadow-[0_0_10px_#10b981]" />
-              <Button size="small" onClick={() => setAdvancedView(false)}>
-                返回标准视图
-              </Button>
-              <Button size="small" onClick={() => navigate('/rooms')}>
-                退出房间
-              </Button>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-700/50 px-3 py-1 rounded">
+                <span className="font-mono">回合 {session.currentRound}</span>
+                <span className="h-1 w-1 rounded-full bg-emerald-500 shadow-[0_0_10px_#10b981]" />
+                <span className="capitalize">{session.roundStatus}</span>
+              </div>
+              <Space>
+                <HelpButton size="small" type="default" />
+                <Button 
+                  size="small" 
+                  onClick={() => setAdvancedView(false)}
+                  className="bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600"
+                >
+                  返回标准视图
+                </Button>
+                <Button 
+                  size="small" 
+                  onClick={() => navigate('/rooms')}
+                  className="bg-red-700 border-red-600 text-red-100 hover:bg-red-600"
+                >
+                  退出房间
+                </Button>
+              </Space>
             </div>
           </header>
 
@@ -477,16 +539,17 @@ function GameSessionPage() {
   }
 
   return (
-    <div className="game-shell">
-      <div className="game-container">
+    <div className="game-shell" style={{ height: '100vh', overflow: 'hidden' }}>
+      <div className="game-container" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
         {/* 顶部状态栏 */}
-        <header className="status-bar">
+        <header className="status-bar" style={{ flexShrink: 0 }}>
           <div className="status-group" style={{ marginLeft: 16 }}>
             <Button
               ghost
               icon={<ArrowLeft size={16} />}
               onClick={() => navigate(-1)}
               style={{ marginRight: 8 }}
+              title="返回上一页"
             >
               返回
             </Button>
@@ -494,6 +557,7 @@ function GameSessionPage() {
               ghost
               icon={<ArrowRight className="rotate-180" size={16} />}
               onClick={() => navigate('/rooms')}
+              title="退出游戏回到房间列表"
             >
               退出
             </Button>
@@ -540,6 +604,7 @@ function GameSessionPage() {
             <Button size="small" onClick={() => setAdvancedView(true)}>
               高级视图
             </Button>
+            <HelpButton size="small" type="default" />
 
             {/* 当回合处于结果阶段时，给玩家一个显式入口查看推演结果 */}
             {session.roundStatus === 'result' && (
@@ -556,7 +621,8 @@ function GameSessionPage() {
           </div>
         </header>
 
-        <Row gutter={[20, 20]} style={{ alignItems: 'stretch' }} className="flex-1">
+        <div style={{ flex: 1, overflow: 'auto', padding: '20px 0' }}>
+          <Row gutter={[20, 20]} style={{ alignItems: 'stretch' }} className="flex-1">
         {/* 左侧栏 - 玩家状态 */}
           <Col span={6} className="col-stack">
             <GlassCard className="card-panel h-full">
@@ -790,7 +856,7 @@ function GameSessionPage() {
                   <Activity size={16} className="text-indigo-500" /> 实时局势/事件跟踪
                 </div>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-3" style={{ maxHeight: '300px', overflowY: 'auto' }}>
                 {ongoingEvents.length > 0 ? (
                   ongoingEvents.map((event: any, index: number) => {
                     const eventType = event.type || event.eventType || 'neutral';
@@ -832,20 +898,62 @@ function GameSessionPage() {
               </div>
             </GlassCard>
 
+            {/* 快速操作面板 */}
+            <GlassCard className="card-panel h-auto mt-3">
+              <div className="card-header-line">
+                <div className="card-title-sm flex items-center gap-2">
+                  <Target size={16} className="text-blue-500" /> 快速操作
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Button 
+                  block 
+                  size="small" 
+                  icon={<RefreshCw size={14} />}
+                  onClick={() => {
+                    loadSession();
+                    loadDecisions();
+                    message.success('状态已刷新');
+                  }}
+                >
+                  刷新状态
+                </Button>
+                <Button 
+                  block 
+                  size="small" 
+                  icon={<History size={14} />}
+                  onClick={() => navigate(`/game/${sessionId}/events`)}
+                >
+                  查看事件进度
+                </Button>
+                <Button 
+                  block 
+                  size="small" 
+                  icon={<Trophy size={14} />}
+                  onClick={() => navigate(`/game/history`)}
+                >
+                  游戏历史
+                </Button>
+              </div>
+            </GlassCard>
+
             <GlassCard className="card-panel h-full">
               <div className="card-header-line">
                 <div className="card-title-sm flex items-center gap-2">
                   <Info size={16} /> 大事纪
                 </div>
               </div>
-              <div className="text-xs text-slate-500 space-y-3">
+              <div className="text-xs text-slate-500 space-y-3" style={{ maxHeight: '200px', overflowY: 'auto' }}>
                 <div className="text-center py-4 text-slate-400">
                   暂无大事纪记录
+                  <br />
+                  <span className="text-xs">重要事件将在此显示</span>
                 </div>
               </div>
             </GlassCard>
           </Col>
         </Row>
+        </div>
 
         {/* 成就弹窗管理器 */}
         <AchievementManager

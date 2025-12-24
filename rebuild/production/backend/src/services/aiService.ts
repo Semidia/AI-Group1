@@ -64,6 +64,7 @@ export class AIService {
   private static instance: AIService;
   private defaultRetries = 3;
   private defaultTimeout = 60000; // 60秒超时
+  private initTimeout = 300000; // 初始化任务5分钟超时，与前端保持一致
 
   private constructor() { }
 
@@ -334,7 +335,8 @@ export class AIService {
   async callAI(
     config: AIConfig,
     prompt: string,
-    retries = this.defaultRetries
+    retries = this.defaultRetries,
+    timeout?: number
   ): Promise<InferenceResult['result']> {
     if (!config.endpoint) {
       throw new Error('AI API endpoint not configured');
@@ -364,7 +366,7 @@ export class AIService {
         ...((config.headers as Record<string, string>) || {}),
       },
       data: requestBody,
-      timeout: this.defaultTimeout,
+      timeout: timeout || this.defaultTimeout,
     };
 
     // 记录请求配置（不记录敏感信息）
@@ -947,7 +949,7 @@ export class AIService {
         initialCash: initConfig.initialCash,
       });
 
-      const result = await this.callAI(config, prompt);
+      const result = await this.callAI(config, prompt, this.defaultRetries, this.initTimeout);
 
       // 解析结果
       if (result.narrative) {
