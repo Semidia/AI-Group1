@@ -8,6 +8,7 @@ import {
   Users, Zap, Coins, Trophy,
   Target, MessageSquare, Send, RefreshCw,
   Clock, History, ArrowRight, Activity, Info, ArrowLeft,
+  Wallet, Save, ListTodo,
 } from 'lucide-react';
 import { gameAPI, GameSessionSummary, DecisionSummary } from '../services/game';
 import { useAuthStore } from '../stores/authStore';
@@ -25,6 +26,10 @@ import AssessmentCards from '../components/AssessmentCards';
 import HexagramDisplay from '../components/HexagramDisplay';
 import { AchievementManager } from '../components/AchievementPopup';
 import { HelpButton } from '../components/HelpButton';
+import TradeDrawer from '../components/TradeDrawer';
+import SaveDrawer from '../components/SaveDrawer';
+import TaskDrawer from '../components/TaskDrawer';
+import CashFlowChart from '../components/CashFlowChart';
 import type { TurnResultDTO, TurnAchievement, TurnHexagram } from '../types/turnResult';
 
 const { TextArea } = Input;
@@ -54,6 +59,12 @@ function GameSessionPage() {
   const [gameState, setGameState] = useState<any>(null); // 完整的游戏状态（包含 players、currentHexagram 等）
   // 新增：成就队列
   const [pendingAchievements, setPendingAchievements] = useState<TurnAchievement[]>([]);
+  // 新增：抽屉状态
+  const [tradeDrawerOpen, setTradeDrawerOpen] = useState(false);
+  const [saveDrawerOpen, setSaveDrawerOpen] = useState(false);
+  const [taskDrawerOpen, setTaskDrawerOpen] = useState(false);
+  // 新增：现金流历史
+  const [cashHistory, setCashHistory] = useState<Array<{ round: number; cash: number }>>([]);
 
   // 使用 useDecisionTimer hook
   const timerState = useDecisionTimer({
@@ -179,13 +190,22 @@ function GameSessionPage() {
         const uiTurn: TurnResultDTO | undefined =
           rawResult?.uiTurnResult || (state.gameState as any)?.uiTurnResult;
         setTurnResult(uiTurn || null);
+        
+        // 更新现金流历史
+        if (uiTurn?.ledger?.balance && session?.currentRound) {
+          setCashHistory(prev => {
+            const existing = prev.find(h => h.round === session.currentRound);
+            if (existing) return prev;
+            return [...prev, { round: session.currentRound, cash: uiTurn.ledger?.balance || 0 }].slice(-10);
+          });
+        }
       } catch {
         // 推演结果是增量能力，失败时静默忽略
         setTurnResult(null);
         setGameState(null);
       }
     },
-    [sessionId]
+    [sessionId, session?.currentRound]
   );
 
   useEffect(() => {
@@ -290,6 +310,20 @@ function GameSessionPage() {
       wsService.off('time_limit_adjusted', handleTimeLimitAdjusted);
     };
   }, [sessionId, loadDecisions, loadTurnResult, navigate, handleAchievementUnlock]);
+
+  // 键盘快捷键：Ctrl+Enter 提交决策
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        if (session?.roundStatus === 'decision' && decisionText.trim() && !submitting) {
+          handleSubmitDecision();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [session?.roundStatus, decisionText, submitting]);
 
   const handleSubmitDecision = async () => {
     if (!sessionId || !session) return;
@@ -724,6 +758,18 @@ function GameSessionPage() {
                 </Button>
               </div>
             </GlassCard>
+
+            {/* 现金流趋势图 */}
+            {cashHistory.length > 0 && (
+              <div className="mt-3">
+                <CashFlowChart
+                  history={cashHistory}
+                  passiveIncome={turnResult?.ledger?.passiveIncome || 0}
+                  passiveExpense={turnResult?.ledger?.passiveExpense || 0}
+                  currentCash={turnResult?.ledger?.balance || 0}
+                />
+              </div>
+            )}
           </Col>
 
         {/* 中间栏 - 剧情与推演 */}
@@ -744,13 +790,32 @@ function GameSessionPage() {
                   <span className="info-chip">
                     <MessageSquare size={14} /> 决策输入
                   </span>
-                  <span className="text-xs text-slate-500">{decisionText.length} / 500</span>
+                  <span className={`text-xs ${decisionText.length > 400 ? 'text-amber-500 font-medium' : 'text-slate-500'}`}>
+                    {decisionText.length} / 500
+                    {decisionText.length > 0 && decisionText.length < 10 && (
+                      <span className="ml-2 text-slate-400">建议输入更详细的描述</span>
+                    )}
+                  </span>
+                </div>
+                {/* 快捷短语标签 */}
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {['投资研发', '扩大市场', '降低成本', '寻求合作', '观望等待', '防御策略'].map(phrase => (
+                    <Tag
+                      key={phrase}
+                      color="blue"
+                      style={{ cursor: 'pointer', userSelect: 'none' }}
+                      onClick={() => setDecisionText(prev => prev ? `${prev}，${phrase}` : phrase)}
+                    >
+                      + {phrase}
+                    </Tag>
+                  ))}
                 </div>
                 <TextArea
                   rows={10}
                   value={decisionText}
                   onChange={e => setDecisionText(e.target.value)}
                   placeholder={getPlaceholderText()}
+                  maxLength={500}
                   className="decision-input"
                   style={{ flex: 1 }}
                 />
@@ -782,7 +847,10 @@ function GameSessionPage() {
                     </Space>
                   </div>
                 )}
-                <div className="decision-actions">
+                <div className="decision-actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span className="text-xs text-slate-400">
+                    提示：按 Ctrl+Enter 快速提交
+                  </span>
                   <Button
                     type="primary"
                     size="middle"
@@ -921,6 +989,30 @@ function GameSessionPage() {
                 <Button 
                   block 
                   size="small" 
+                  icon={<Wallet size={14} />}
+                  onClick={() => setTradeDrawerOpen(true)}
+                >
+                  交易中心
+                </Button>
+                <Button 
+                  block 
+                  size="small" 
+                  icon={<Save size={14} />}
+                  onClick={() => setSaveDrawerOpen(true)}
+                >
+                  存档管理
+                </Button>
+                <Button 
+                  block 
+                  size="small" 
+                  icon={<ListTodo size={14} />}
+                  onClick={() => setTaskDrawerOpen(true)}
+                >
+                  任务追踪
+                </Button>
+                <Button 
+                  block 
+                  size="small" 
                   icon={<History size={14} />}
                   onClick={() => navigate(`/game/${sessionId}/events`)}
                 >
@@ -959,6 +1051,30 @@ function GameSessionPage() {
         <AchievementManager
           achievements={pendingAchievements}
           onAllClosed={handleAchievementsClosed}
+        />
+
+        {/* 抽屉组件 */}
+        <TradeDrawer
+          open={tradeDrawerOpen}
+          onClose={() => setTradeDrawerOpen(false)}
+          sessionId={sessionId || ''}
+          currentUserId={user?.userId}
+          players={decisions.map(d => ({
+            id: d.userId || String(d.playerIndex),
+            name: `玩家 ${d.playerIndex}`,
+          }))}
+        />
+        <SaveDrawer
+          open={saveDrawerOpen}
+          onClose={() => setSaveDrawerOpen(false)}
+          sessionId={sessionId || ''}
+          currentRound={session?.currentRound || 1}
+          isHost={session?.hostId === user?.id}
+        />
+        <TaskDrawer
+          open={taskDrawerOpen}
+          onClose={() => setTaskDrawerOpen(false)}
+          sessionId={sessionId || ''}
         />
       </div>
     </div>
