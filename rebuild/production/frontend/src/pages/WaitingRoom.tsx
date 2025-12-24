@@ -55,6 +55,14 @@ function WaitingRoom() {
 
   useEffect(() => {
     loadRooms();
+    // 添加定时刷新，每10秒刷新一次房间列表
+    const refreshInterval = setInterval(() => {
+      loadRooms();
+    }, 10000);
+
+    return () => {
+      clearInterval(refreshInterval);
+    };
   }, [loadRooms]);
 
   useEffect(() => {

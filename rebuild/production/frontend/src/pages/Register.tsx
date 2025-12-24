@@ -1,5 +1,5 @@
 import { Form, Input, Button, Card, message } from 'antd';
-import { UserOutlined, LockOutlined } from '@ant-design/icons';
+import { UserOutlined, LockOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { useNavigate, Link } from 'react-router-dom';
 import { useState } from 'react';
 import { authAPI } from '../services/auth';
@@ -44,7 +44,22 @@ function Register() {
         minHeight: '100vh',
       }}
     >
-      <Card title="注册" style={{ width: 400 }}>
+      <Card 
+        title={
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <Button 
+              type="text" 
+              icon={<ArrowLeftOutlined />} 
+              onClick={() => navigate(-1)} 
+              style={{ marginRight: 16 }}
+            >
+              返回
+            </Button>
+            <span>注册</span>
+          </div>
+        } 
+        style={{ width: 400 }}
+      >
         <Form name="register" onFinish={onFinish} autoComplete="off">
           <Form.Item
             name="username"

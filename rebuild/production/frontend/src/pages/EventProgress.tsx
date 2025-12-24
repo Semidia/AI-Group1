@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card,
   List,
@@ -11,7 +11,9 @@ import {
   Alert,
   Spin,
   message,
+  Button,
 } from 'antd';
+import { ArrowLeft } from 'lucide-react';
 import { gameAPI } from '../services/game';
 import { wsService } from '../services/websocket';
 import { useSocket } from '../hooks/useSocket';
@@ -46,6 +48,7 @@ interface ActiveEventsResponse {
 
 function EventProgressPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
+  const navigate = useNavigate();
   const socketStatus = useSocket();
   useMessageRouter();
 
@@ -133,7 +136,15 @@ function EventProgressPage() {
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
       <Card>
         <Space direction="vertical" style={{ width: '100%' }} size="large">
-          <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Button
+              ghost
+              icon={<ArrowLeft size={16} />}
+              onClick={() => navigate(-1)}
+              style={{ marginRight: 16 }}
+            >
+              返回
+            </Button>
             <Title level={3}>多回合事件进度</Title>
             <Space>
               <Tag color={socketStatus === 'connected' ? 'green' : 'red'}>

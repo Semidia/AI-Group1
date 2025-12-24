@@ -7,7 +7,7 @@ import {
 import {
   Users, Zap, Coins, Trophy,
   Target, MessageSquare, Send, RefreshCw,
-  Clock, History, ArrowRight, Activity, Info
+  Clock, History, ArrowRight, Activity, Info, ArrowLeft,
 } from 'lucide-react';
 import { gameAPI, GameSessionSummary, DecisionSummary } from '../services/game';
 import { useAuthStore } from '../stores/authStore';
@@ -438,6 +438,14 @@ function GameSessionPage() {
         {/* 顶部状态栏 */}
         <header className="status-bar">
           <div className="status-group">
+            <Button
+              ghost
+              icon={<ArrowLeft size={16} />}
+              onClick={() => navigate(-1)}
+              style={{ marginRight: 8 }}
+            >
+              返回
+            </Button>
             <Button
               ghost
               icon={<ArrowRight className="rotate-180" size={16} />}
