@@ -285,7 +285,14 @@ export class AIService {
       promptLength: prompt.length,
     });
 
-    const axiosConfig: AxiosRequestConfig = {
+    // Check if streaming is enabled and disable it if so (backend doesn't support streaming yet)
+    const isStreaming = requestBody.stream === true;
+    if (isStreaming) {
+      logger.warn(`Stream mode is enabled but backend doesn't support streaming yet. Setting stream=false for this request.`);
+      requestBody = { ...requestBody, stream: false };
+    }
+
+    let axiosConfig: AxiosRequestConfig = {
       method: 'POST',
       url: config.endpoint,
       headers: {
@@ -303,6 +310,7 @@ export class AIService {
       headersKeys: Object.keys(axiosConfig.headers || {}),
       hasData: !!requestBody,
       timeout: axiosConfig.timeout,
+      isStreamingRequest: isStreaming,
       requestBodyStructure: requestBody ? {
         keys: Object.keys(requestBody),
         model: requestBody.model,
@@ -317,6 +325,7 @@ export class AIService {
           : [],
         temperature: requestBody.temperature,
         maxTokens: requestBody.max_tokens || requestBody.maxTokens,
+        stream: requestBody.stream,
       } : null,
     });
 
@@ -325,10 +334,33 @@ export class AIService {
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         logger.info(`Calling AI API (attempt ${attempt}/${retries}): ${config.endpoint}`);
+        
         const response = await axios(axiosConfig);
 
+        // Log the raw response for debugging
+        logger.info(`AI API response received (attempt ${attempt}/${retries})`, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.keys(response.headers || {}),
+          dataType: typeof response.data,
+          dataKeys: typeof response.data === 'object' && response.data !== null ? Object.keys(response.data) : 'N/A',
+          responsePreview: typeof response.data === 'string' 
+            ? response.data.substring(0, 500) 
+            : JSON.stringify(response.data).substring(0, 500),
+        });
+
         // 解析响应（根据不同的AI服务提供商可能有不同的格式）
-        return this.parseResponse(response.data, config.provider || 'default');
+        const parsed = this.parseResponse(response.data, config.provider || 'default');
+        
+        logger.info(`AI API response parsed successfully`, {
+          hasNarrative: !!parsed.narrative,
+          narrativeLength: parsed.narrative?.length || 0,
+          outcomesCount: parsed.outcomes?.length || 0,
+          eventsCount: parsed.events?.length || 0,
+          parsedKeys: Object.keys(parsed),
+        });
+        
+        return parsed;
       } catch (error: any) {
         lastError = error;
         
@@ -361,6 +393,8 @@ export class AIService {
           endpoint: config.endpoint,
           errorCode: error.code,
           statusCode: error.response?.status,
+          responseData: error.response?.data ? JSON.stringify(error.response.data).substring(0, 500) : 'N/A',
+          responseHeaders: error.response?.headers ? Object.keys(error.response.headers) : 'N/A',
         });
 
         if (attempt < retries) {
@@ -380,8 +414,21 @@ export class AIService {
    * 解析AI响应（支持多种格式）
    */
   private parseResponse(data: unknown, provider: string): InferenceResult['result'] {
+    logger.info(`Parsing AI response for provider: ${provider}`, {
+      dataType: typeof data,
+      isNull: data === null,
+      isArray: Array.isArray(data),
+      keys: typeof data === 'object' && data !== null ? Object.keys(data) : 'N/A',
+      fullDataPreview: typeof data === 'string' 
+        ? data.substring(0, 1000) 
+        : JSON.stringify(data).substring(0, 1000),
+    });
+    
     if (typeof data !== 'object' || data === null) {
-      logger.warn(`AI response is not an object for provider: ${provider}, using default format`);
+      logger.warn(`AI response is not an object for provider: ${provider}, using default format`, {
+        dataType: typeof data,
+        dataPreview: typeof data === 'string' ? data.substring(0, 200) : String(data),
+      });
       return {
         narrative: typeof data === 'string' ? data : JSON.stringify(data),
       };

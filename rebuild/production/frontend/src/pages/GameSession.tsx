@@ -57,6 +57,10 @@ function GameSessionPage() {
   const [advancedView, setAdvancedView] = useState(false);
   const [advancedSharedSnippet, setAdvancedSharedSnippet] = useState('');
   const [turnResult, setTurnResult] = useState<TurnResultDTO | null>(null);
+  // 游戏规则（蓝本）- 保留用于将来可能的UI显示
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [gameRules, setGameRules] = useState<string | null>(null);
+  const [gameState, setGameState] = useState<any>(null); // 完整的游戏状态（包含 players、currentHexagram 等）
 
   const isTimeout = useMemo(() => {
     if (!session?.decisionDeadline) return false;
@@ -82,14 +86,6 @@ function GameSessionPage() {
         return '时间紧迫！请快速做出决策并提交...';
       }
 
-      // First round guidance
-      if (session.currentRound === 1) {
-        if (recommendedOptions.length > 0) {
-          return `作为这片废土的幸存者，你接下来打算怎么做？可以输入自定义决策，或选择下方AI推荐的${recommendedOptions.length}个选项之一`;
-        }
-        return '作为这片废土的幸存者，你接下来打算怎么做？描述你的精确意图...';
-      }
-
       // Has recommended options
       if (recommendedOptions.length > 0) {
         return `可以输入自定义决策，或选择下方AI推荐的${recommendedOptions.length}个选项之一`;
@@ -111,6 +107,7 @@ function GameSessionPage() {
       try {
         const data = await gameAPI.getSession(sessionId);
         setSession(data);
+        setGameRules(data.gameRules || null); // 读取游戏规则（蓝本）
         
         // 如果是主持人，跳转到游戏状态页面
         if (data.hostId && user?.id && data.hostId === user.id) {
@@ -141,6 +138,8 @@ function GameSessionPage() {
       if (!sessionId) return;
       try {
         const state = await gameAPI.getGameState(sessionId);
+        setGameState(state.gameState); // 保存完整的游戏状态
+        
         const rawResult = state.inferenceResult?.result as any;
         const uiTurn: TurnResultDTO | undefined =
           rawResult?.uiTurnResult || (state.gameState as any)?.uiTurnResult;
@@ -148,6 +147,7 @@ function GameSessionPage() {
       } catch {
         // 推演结果是增量能力，失败时静默忽略
         setTurnResult(null);
+        setGameState(null);
       }
     },
     [sessionId]
@@ -224,6 +224,18 @@ function GameSessionPage() {
 
   const handleSubmitDecision = async () => {
     if (!sessionId || !session) return;
+    
+    // 检查是否超时（仅限制玩家提交，主持人提交给AI不受此限制）
+    if (isTimeout) {
+      message.error('当前回合决策已超时，无法提交');
+      return;
+    }
+    
+    if (session.roundStatus !== 'decision') {
+      message.error('当前阶段不允许提交决策');
+      return;
+    }
+    
     if (!decisionText.trim()) {
       message.warning('请输入决策内容');
       return;
@@ -236,13 +248,55 @@ function GameSessionPage() {
       });
       message.success('决策已提交');
       loadDecisions();
-    } catch (err) {
-      message.error('提交决策失败');
+    } catch (err: any) {
+      message.error(err?.response?.data?.message || err?.message || '提交决策失败');
     } finally {
       setSubmitting(false);
     }
   };
 
+  // 为高级视图派生一个简单的阶段状态，用于 NarrativeFeed 等组件
+  // 注意：必须在早期返回之前调用所有 hooks
+  const advancedPhase: 'READING' | 'DECIDING' | 'RESOLVING' = useMemo(() => {
+    if (!session) return 'READING';
+    return session.roundStatus === 'decision'
+      ? 'DECIDING'
+      : session.roundStatus === 'result'
+      ? 'RESOLVING'
+      : 'READING';
+  }, [session?.roundStatus]);
+
+  const remainingSecondsNumeric = useMemo(() => {
+    if (!session?.decisionDeadline) return 0;
+    const end = new Date(session.decisionDeadline).getTime();
+    const diff = Math.floor((end - currentTime) / 1000);
+    return diff > 0 ? diff : 0;
+  }, [session?.decisionDeadline, currentTime]);
+
+  // 获取当前玩家的属性（从 gameState.players[me].attributes）
+  const playerAttributes = useMemo(() => {
+    if (!gameState || !user?.userId) return {};
+    const players = (gameState as any)?.players;
+    if (!players || !Array.isArray(players)) return {};
+    
+    // 找到当前玩家的数据
+    const currentPlayer = players.find((p: any) => p.userId === user.userId || p.id === user.userId);
+    return currentPlayer?.attributes || {};
+  }, [gameState, user?.userId]);
+
+  // 获取当前卦象（从 gameState.currentHexagram）
+  const currentHexagram = useMemo(() => {
+    if (!gameState) return null;
+    return (gameState as any)?.currentHexagram || null;
+  }, [gameState]);
+
+  // 获取进行中的事件（从 inferenceResult.events，type 为 ongoing）
+  const ongoingEvents = useMemo(() => {
+    if (!turnResult?.events) return [];
+    return turnResult.events.filter((e: any) => e.type === 'ongoing' || e.status === 'ongoing');
+  }, [turnResult?.events]);
+
+  // 早期返回必须在所有 hooks 调用之后
   if (!session) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
@@ -252,28 +306,8 @@ function GameSessionPage() {
     );
   }
 
-  // 为高级视图派生一个简单的阶段状态，用于 NarrativeFeed 等组件
-  const advancedPhase: 'READING' | 'DECIDING' | 'RESOLVING' =
-    session.roundStatus === 'decision'
-      ? 'DECIDING'
-      : session.roundStatus === 'result'
-      ? 'RESOLVING'
-      : 'READING';
-
-  const remainingSecondsNumeric = useMemo(() => {
-    if (!session.decisionDeadline) return 0;
-    const end = new Date(session.decisionDeadline).getTime();
-    const diff = Math.floor((end - currentTime) / 1000);
-    return diff > 0 ? diff : 0;
-  }, [session.decisionDeadline, currentTime]);
-
   // 高级视图：基于真实会话状态，组合新的控制台布局
   if (advancedView) {
-    const playerMoney = 720;
-    const playerForce = 65;
-    const playerInfluence = 58;
-    const playerIntel = 80;
-
     const opponentsIntel: OpponentIntelRecord[] = decisions
       .filter(item => item.userId !== user?.userId)
       .map(item => {
@@ -357,12 +391,7 @@ function GameSessionPage() {
             <div className="flex-1 grid grid-cols-12 gap-3">
               <div className="col-span-3 flex flex-col gap-2">
                 <ResourcePanel
-                  player={{
-                    money: playerMoney,
-                    force: playerForce,
-                    influence: playerInfluence,
-                    intelLevel: playerIntel,
-                  }}
+                  playerAttributes={playerAttributes}
                   opponents={[]}
                 />
                 <OpponentIntel
@@ -426,6 +455,19 @@ function GameSessionPage() {
                 <span className="text-[11px] text-slate-500 uppercase tracking-wider">阶段</span>
                 <Tag color="cyan" className="m-0 uppercase">{session.roundStatus}</Tag>
               </div>
+              {currentHexagram && (
+                <>
+                  <Divider type="vertical" className="h-8 border-slate-200" />
+                  <div className="flex flex-col">
+                    <span className="text-[11px] text-slate-500 uppercase tracking-wider">当前卦象</span>
+                    <span className="text-lg font-bold text-slate-900">
+                      {typeof currentHexagram === 'string' 
+                        ? currentHexagram 
+                        : (currentHexagram as any)?.name || (currentHexagram as any)?.hexagram || '未知'}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -477,24 +519,47 @@ function GameSessionPage() {
                     <div className="font-bold text-base leading-tight text-slate-900">{user?.username}</div>
                     <div className="attr-row justify-center">
                       <Tag color="gold">LV.{user?.level || 1}</Tag>
-                      <span className="attr-muted">生存者</span>
+                      <span className="attr-muted">参与者</span>
                     </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-slate-200">
-                    <span className="flex items-center gap-2 text-sm text-slate-700">
-                      <Coins size={16} className="text-amber-500" /> 金币
-                    </span>
-                    <span className="font-bold text-slate-900">2,450</span>
+                {/* 动态资源显示 */}
+                {Object.keys(playerAttributes).length > 0 ? (
+                  <div className="space-y-2">
+                    {Object.entries(playerAttributes).map(([key, value]) => {
+                      const numValue: number = typeof value === 'string' ? parseFloat(value) || 0 : (typeof value === 'number' ? value : 0);
+                      const isMoney = key.includes('金钱') || key.includes('money') || key.includes('元');
+                      const isPercentage = key.includes('level') || key.includes('Level') || key.includes('等级');
+                      const maxValue = isPercentage ? 100 : (isMoney ? Math.max(10000, numValue * 2) : Math.max(100, numValue * 2));
+                      const percent = Math.max(0, Math.min(100, (numValue / maxValue) * 100));
+                      
+                      return (
+                        <div key={key} className="flex flex-col gap-1 px-3 py-2 bg-gray-50 rounded-lg border border-slate-200">
+                          <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-2 text-sm text-slate-700">
+                              {isMoney ? (
+                                <Coins size={16} className="text-amber-500" />
+                              ) : (
+                                <Zap size={16} className="text-blue-500" />
+                              )}
+                              {key}
+                            </span>
+                            <span className="font-bold text-slate-900">
+                              {typeof value === 'string' ? value : numValue.toLocaleString()}
+                            </span>
+                          </div>
+                          {!isMoney && (
+                            <Progress percent={percent} size="small" strokeColor={isPercentage ? "#60a5fa" : "#6366f1"} showInfo={false} />
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                  <div className="flex flex-col gap-1 px-3 py-2 bg-gray-50 rounded-lg border border-slate-200">
-                    <span className="flex items-center gap-2 text-sm text-slate-700">
-                      <Zap size={16} className="text-blue-500" /> 能量
-                    </span>
-                    <Progress percent={85} size="small" strokeColor="#60a5fa" showInfo={false} />
+                ) : (
+                  <div className="text-xs text-slate-400 py-4 text-center">
+                    等待游戏状态同步...
                   </div>
-                </div>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -704,27 +769,48 @@ function GameSessionPage() {
             <GlassCard className="card-panel h-full">
               <div className="card-header-line">
                 <div className="card-title-sm flex items-center gap-2">
-                  <Target size={16} className="text-rose-500" /> 当前挑战
+                  <Activity size={16} className="text-indigo-500" /> 实时局势/事件跟踪
                 </div>
               </div>
               <div className="space-y-3">
-                <div className="p-3 bg-gray-50 rounded-lg border border-slate-200">
-                  <div className="text-sm font-bold mb-1 text-slate-900">主线：建立据点</div>
-                  <Progress
-                    percent={45}
-                    size="small"
-                    strokeColor="#6366f1"
-                    trailColor="rgba(0,0,0,0.06)"
-                    strokeWidth={10}
-                    style={{ marginTop: 4 }}
-                  />
-                  <div className="text-[11px] text-slate-500 mt-1 uppercase">奖励：+500 信用额度</div>
-                </div>
-                <div className="p-3 bg-gray-50 rounded-lg border border-slate-200 opacity-80">
-                  <div className="text-sm font-bold mb-1 text-slate-900">支线：寻找水源</div>
-                  <Tag color="default">未激活</Tag>
-                </div>
-                <Button block type="link" size="small" onClick={() => navigate(`/game/${sessionId}/tasks`)}>查看全部任务</Button>
+                {ongoingEvents.length > 0 ? (
+                  ongoingEvents.map((event: any, index: number) => {
+                    const eventType = event.type || event.eventType || 'neutral';
+                    const isPositive = eventType.includes('positive') || eventType.includes('positive') || eventType.includes('机会');
+                    const isNegative = eventType.includes('negative') || eventType.includes('风险') || eventType.includes('threat');
+                    const color = isPositive ? 'emerald' : isNegative ? 'rose' : 'slate';
+                    
+                    return (
+                      <div key={index} className={`p-3 bg-gray-50 rounded-lg border border-${color}-200`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <div className={`text-sm font-bold text-${color}-700`}>
+                            {event.title || event.description || event.content || '进行中的事件'}
+                          </div>
+                          <Tag color={isPositive ? 'success' : isNegative ? 'error' : 'default'}>
+                            {isPositive ? '正面' : isNegative ? '负面' : '中性'}
+                          </Tag>
+                        </div>
+                        {event.description && (
+                          <p className="text-xs text-slate-600 mt-1 leading-relaxed">{event.description}</p>
+                        )}
+                        {event.progress !== undefined && (
+                          <Progress
+                            percent={typeof event.progress === 'number' ? event.progress : 0}
+                            size="small"
+                            strokeColor={isPositive ? "#10b981" : isNegative ? "#ef4444" : "#6366f1"}
+                            trailColor="rgba(0,0,0,0.06)"
+                            strokeWidth={8}
+                            style={{ marginTop: 8 }}
+                          />
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-xs text-slate-400 py-6 text-center">
+                    暂无进行中的事件
+                  </div>
+                )}
               </div>
             </GlassCard>
 

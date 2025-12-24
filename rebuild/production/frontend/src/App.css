@@ -322,7 +322,9 @@
   content: '';
   position: absolute;
   inset: 3px;
-  background: linear-gradient(120deg, #0c1220, #0c1426);
+  /* Keep inner area consistent with the base strong button gradient,
+     so the glow does not turn the whole button成一块纯黑 */
+  background: linear-gradient(120deg, #0f172a 0%, #0d2539 55%, #002f43 100%);
   z-index: 1;
   border-radius: inherit;
 }
@@ -335,6 +337,16 @@
 .btn-strong.glow > * {
   position: relative;
   z-index: 2;
+}
+
+/* Slightly brighter variant for compact hero-card buttons,
+  避免在浅色卡片上看起来是一整块纯黑 */
+.btn-strong.glow.slim {
+  background: linear-gradient(135deg, #0f172a 0%, #04304a 40%, #0ea5e9 100%);
+}
+
+.btn-strong.glow.slim::after {
+  background: linear-gradient(135deg, #020817 0%, #06213a 45%, #0ea5e9 100%);
 }
 
 /* Rank change pulse */
@@ -565,6 +577,35 @@
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 12px;
   width: 100%;
+}
+
+/* Home quick entry button: use AntD button with outer glow wrapper */
+.quick-entry-glow {
+  display: inline-block;
+  padding: 2px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 0% 0%, rgba(34, 197, 235, 0.6), transparent 60%),
+    radial-gradient(circle at 100% 100%, rgba(45, 212, 191, 0.5), transparent 55%);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.25);
+}
+
+.quick-entry-btn.ant-btn-primary {
+  border-radius: 999px;
+  padding-inline: 28px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #0f172a 0%, #0b5563 45%, #22c1c3 100%);
+  box-shadow: none;
+  color: #ffffff !important; /* 确保文字在深色背景上可见 */
+  border: none;
+}
+
+.quick-entry-btn.ant-btn-primary:hover {
+  background: linear-gradient(135deg, #020617 0%, #0b5563 35%, #38bdf8 100%);
+  color: #ffffff !important;
+}
+
+.quick-entry-btn.ant-btn-primary .anticon {
+  color: #ffffff !important; /* 确保图标也是白色 */
 }
 
 .hero-copy {

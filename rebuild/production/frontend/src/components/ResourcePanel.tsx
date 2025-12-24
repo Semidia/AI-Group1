@@ -1,39 +1,94 @@
 import React from 'react';
-import { Shield, Sword, Eye, Trophy } from 'lucide-react';
-
-interface PlayerResources {
-  money: number;
-  force: number;
-  influence: number;
-  intelLevel: number;
-}
-
-interface OpponentIntel {
-  id: string;
-  name: string;
-  moneyMin: number;
-  moneyMax: number;
-  confidence: 'low' | 'medium' | 'high';
-}
+import { Shield, Sword, Eye, Trophy, Coins, Zap } from 'lucide-react';
 
 interface ResourcePanelProps {
-  player: PlayerResources;
-  opponents: OpponentIntel[];
+  /** 玩家属性对象（动态，从 gameState.players[me].attributes 读取） */
+  playerAttributes?: Record<string, number | string>;
+  /** 对手情报（可选，用于高级视图） */
+  opponents?: Array<{
+    id: string;
+    name: string;
+    moneyMin: number;
+    moneyMax: number;
+    confidence: 'low' | 'medium' | 'high';
+  }>;
 }
 
 /**
- * ResourcePanel
- * - Left sidebar for player multi-dimensional resources.
- * - Shows "incomplete information" opponent intel using range plus blur effect.
- *
- * 非完全信息视觉遮蔽逻辑说明：
- * - 对手的具体数值不直接展示，而是用 moneyMin - moneyMax 的范围文案；
- * - 范围文本添加 Tailwind 的 blur-sm 滤镜，使玩家只能感知大致区间；
- * - 可以根据 confidence 调整模糊强度或文本颜色，以表达情报可信度。
+ * ResourcePanel - 数据驱动的资源面板
+ * - 动态读取 gameState.players[me].attributes 对象
+ * - 核心固定属性："金钱（元）"
+ * - 其他属性（如"原材料"、"影响力"等）由 AI 推演动态添加
+ * - 对手情报显示（可选，用于高级视图）
  */
-const ResourcePanel: React.FC<ResourcePanelProps> = ({ player, opponents }) => {
-  const renderBar = (label: string, value: number, max: number, color: string, icon: React.ReactNode) => {
-    const percent = Math.max(0, Math.min(100, (value / max) * 100));
+const ResourcePanel: React.FC<ResourcePanelProps> = ({ playerAttributes = {}, opponents = [] }) => {
+  // 资源图标映射（根据属性名自动选择图标）
+  const getResourceIcon = (key: string): React.ReactNode => {
+    const iconMap: Record<string, React.ReactNode> = {
+      '金钱': <Coins size={14} className="text-yellow-400" />,
+      'money': <Coins size={14} className="text-yellow-400" />,
+      '元': <Coins size={14} className="text-yellow-400" />,
+      '能量': <Zap size={14} className="text-blue-400" />,
+      'energy': <Zap size={14} className="text-blue-400" />,
+      'force': <Sword size={14} className="text-red-400" />,
+      'influence': <Shield size={14} className="text-sky-400" />,
+      'intelLevel': <Eye size={14} className="text-emerald-400" />,
+    };
+    
+    // 尝试匹配（支持中英文）
+    const lowerKey = key.toLowerCase();
+    for (const [mapKey, icon] of Object.entries(iconMap)) {
+      if (lowerKey.includes(mapKey.toLowerCase()) || key.includes(mapKey)) {
+        return icon;
+      }
+    }
+    
+    // 默认图标
+    return <Trophy size={14} className="text-slate-400" />;
+  };
+
+  // 资源颜色映射
+  const getResourceColor = (key: string): string => {
+    const colorMap: Record<string, string> = {
+      '金钱': 'bg-yellow-500',
+      'money': 'bg-yellow-500',
+      '元': 'bg-yellow-500',
+      '能量': 'bg-blue-500',
+      'energy': 'bg-blue-500',
+      'force': 'bg-red-500',
+      'influence': 'bg-sky-500',
+      'intelLevel': 'bg-emerald-500',
+    };
+    
+    const lowerKey = key.toLowerCase();
+    for (const [mapKey, color] of Object.entries(colorMap)) {
+      if (lowerKey.includes(mapKey.toLowerCase()) || key.includes(mapKey)) {
+        return color;
+      }
+    }
+    
+    return 'bg-indigo-500'; // 默认颜色
+  };
+
+  // 计算最大值（用于进度条）
+  const getMaxValue = (key: string, value: number): number => {
+    // 如果是百分比类型（0-100），返回100
+    if (key.includes('level') || key.includes('Level') || key.includes('等级')) {
+      return 100;
+    }
+    // 如果是金额类型，使用合理的最大值
+    if (key.includes('金钱') || key.includes('money') || key.includes('元')) {
+      return Math.max(10000, value * 2); // 至少10000，或当前值的2倍
+    }
+    // 默认返回当前值的2倍或100，取较大值
+    return Math.max(100, value * 2);
+  };
+
+  const renderBar = (label: string, value: number | string, icon: React.ReactNode, color: string) => {
+    const numValue = typeof value === 'string' ? parseFloat(value) || 0 : value;
+    const max = getMaxValue(label, numValue);
+    const percent = Math.max(0, Math.min(100, (numValue / max) * 100));
+    
     return (
       <div className="mb-3">
         <div className="flex items-center justify-between mb-1 text-xs text-slate-400">
@@ -41,7 +96,9 @@ const ResourcePanel: React.FC<ResourcePanelProps> = ({ player, opponents }) => {
             {icon}
             {label}
           </span>
-          <span className="font-mono text-slate-100">{value}</span>
+          <span className="font-mono text-slate-100">
+            {typeof value === 'string' ? value : numValue.toLocaleString()}
+          </span>
         </div>
         <div className="h-1.5 w-full bg-slate-900 rounded-full overflow-hidden">
           <div
@@ -59,27 +116,32 @@ const ResourcePanel: React.FC<ResourcePanelProps> = ({ player, opponents }) => {
     return 'Low confidence';
   };
 
+  // 优先显示"金钱"（核心固定属性）
+  const sortedAttributes = Object.entries(playerAttributes).sort(([keyA], [keyB]) => {
+    const moneyKeywords = ['金钱', 'money', '元'];
+    const aIsMoney = moneyKeywords.some(k => keyA.includes(k));
+    const bIsMoney = moneyKeywords.some(k => keyB.includes(k));
+    if (aIsMoney && !bIsMoney) return -1;
+    if (!aIsMoney && bIsMoney) return 1;
+    return 0;
+  });
+
   return (
     <aside className="h-full flex flex-col bg-[#0b0b0d] border border-slate-800 rounded-2xl px-4 py-4 gap-4">
       <div>
         <div className="text-xs text-slate-400 uppercase tracking-[0.25em] mb-2">
-          Intel and assets
+          资源与属性
         </div>
-        {renderBar('Money', player.money, 1000, 'bg-yellow-500', <Trophy size={14} className="text-yellow-400" />)}
-        {renderBar('Force', player.force, 100, 'bg-red-500', <Sword size={14} className="text-red-400" />)}
-        {renderBar(
-          'Influence',
-          player.influence,
-          100,
-          'bg-sky-500',
-          <Shield size={14} className="text-sky-400" />,
-        )}
-        {renderBar(
-          'Intel level',
-          player.intelLevel,
-          100,
-          'bg-emerald-500',
-          <Eye size={14} className="text-emerald-400" />,
+        {sortedAttributes.length > 0 ? (
+          sortedAttributes.map(([key, value]) => {
+            const icon = getResourceIcon(key);
+            const color = getResourceColor(key);
+            return renderBar(key, value, icon, color);
+          })
+        ) : (
+          <div className="text-xs text-slate-500 py-4 text-center">
+            暂无资源数据
+          </div>
         )}
       </div>
 

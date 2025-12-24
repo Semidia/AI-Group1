@@ -8,6 +8,7 @@ export interface GameSessionSummary {
   roundStatus: string;
   decisionDeadline?: string | null;
   status: string;
+  gameRules?: string | null; // 游戏规则（蓝本）
 }
 
 export interface DecisionSummary {

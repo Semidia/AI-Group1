@@ -58,7 +58,7 @@ const getOrCreateHostConfig = async (roomId: string, userId: string) => {
     ],
     temperature: 0.7,
     max_tokens: 2000,
-    stream: true
+    stream: false
   };
 
   return prisma.hostConfig.create({
@@ -270,28 +270,33 @@ router.post('/:roomId/join', authenticateToken, async (req: AuthRequest, res, ne
     const room = await prisma.room.findUnique({ where: { id: roomId } });
     if (!room) throw new AppError('房间不存在', 404);
 
-    // 问题1修复：playing状态的房间不允许加入
+    // 检查玩家是否之前参与过该房间
+    const existing = await prisma.roomPlayer.findFirst({
+      where: { roomId, userId },
+    });
+
+    // 如果用户已经在房间中（未离开），直接返回成功
+    if (existing && existing.status !== 'left') {
+      res.json({ code: 200, message: '已在房间中' });
+      return;
+    }
+
+    // 修复：playing状态的房间，只允许之前参与过的玩家重新加入
     if (room.status === 'playing') {
-      throw new AppError('游戏进行中的房间不允许加入', 403);
+      if (!existing) {
+        // 新玩家不允许加入进行中的房间
+        throw new AppError('游戏进行中的房间不允许新玩家加入', 403);
+      }
+      // 之前参与过的玩家可以重新加入，继续下面的逻辑
     }
 
     if (room.password && room.password !== password) {
       throw new AppError('房间密码错误', 403);
     }
 
-    if (room.currentPlayers >= room.maxPlayers) {
+    // 检查房间是否已满（但如果是重新加入的玩家，不计入满员限制）
+    if (!existing && room.currentPlayers >= room.maxPlayers) {
       throw new AppError('房间已满员', 403);
-    }
-
-    const existing = await prisma.roomPlayer.findFirst({
-      where: { roomId, userId },
-    });
-
-    // If user is already in the room, return success without emitting event (idempotent operation)
-    if (existing && existing.status !== 'left') {
-      // User is already in room, just return success without emitting events
-      res.json({ code: 200, message: '已在房间中' });
-      return;
     }
 
     // User rejoining the room (was previously left) or new user

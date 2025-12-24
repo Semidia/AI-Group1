@@ -151,16 +151,31 @@ router.get(
         throw new AppError('房间不存在', 404);
       }
 
-      // Only players who are still in the room can query the active session
+      // 允许之前参与过游戏的玩家继续游戏（即使他们暂时离开了房间）
+      // 只要他们在 roomPlayer 表中有记录，就允许继续游戏
       const membership = await prisma.roomPlayer.findFirst({
         where: {
           roomId,
           userId,
-          status: { not: 'left' },
         },
       });
       if (!membership) {
         throw new AppError('你当前不在该房间中，无法继续游戏', 403);
+      }
+      
+      // 如果玩家之前离开了房间，自动将其状态更新为 joined，允许重新参与
+      // 注意：这里只更新状态，不更新 currentPlayers，因为玩家应该通过 /api/rooms/:roomId/join 重新加入
+      // 但如果玩家直接访问游戏会话页面，我们也允许他们继续游戏
+      if (membership.status === 'left') {
+        await prisma.roomPlayer.update({
+          where: { id: membership.id },
+          data: { status: 'joined' },
+        });
+        // 同步更新房间人数（因为之前离开时已经减过了）
+        await prisma.room.update({
+          where: { id: roomId },
+          data: { currentPlayers: { increment: 1 } },
+        });
       }
 
       const session = await prisma.gameSession.findUnique({
@@ -586,6 +601,12 @@ router.get('/:sessionId', authenticateToken, async (req: AuthRequest, res, next)
     // 确认用户在房间中
     await ensureRoomMembership(session.roomId, userId);
 
+    // 获取游戏规则（从房间的 hostConfig）
+    const hostConfig = await prisma.hostConfig.findUnique({
+      where: { roomId: session.roomId },
+      select: { gameRules: true },
+    });
+
     res.json({
       code: 200,
       data: {
@@ -596,6 +617,7 @@ router.get('/:sessionId', authenticateToken, async (req: AuthRequest, res, next)
         roundStatus: session.roundStatus,
         decisionDeadline: session.decisionDeadline,
         status: session.status,
+        gameRules: hostConfig?.gameRules || null, // 添加游戏规则
       },
     });
   } catch (error) {

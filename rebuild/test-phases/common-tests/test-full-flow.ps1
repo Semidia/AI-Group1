@@ -19,6 +19,15 @@ $hostPassword   = if ($env:HOST_PASSWORD)   { $env:HOST_PASSWORD }   else { "000
 $playerUsername = if ($env:PLAYER_USERNAME) { $env:PLAYER_USERNAME } else { "testuser1" }
 $playerPassword = if ($env:PLAYER_PASSWORD) { $env:PLAYER_PASSWORD } else { "Test1234!" }
 
+# DeepSeek API Key（可通过环境变量 DEEPSEEK_API_KEY 覆盖，如果未设置则使用下方默认值）
+# 注意：请确保此 Key 有效，否则推演会失败
+$deepseekApiKey = if ($env:DEEPSEEK_API_KEY) { 
+  $env:DEEPSEEK_API_KEY 
+} else { 
+  # 默认值：如果环境变量未设置，使用这里（请替换为你的有效 API Key）
+  "sk-b9b9fc16774b4e5aba3fc3be5c30652d"
+}
+
 Write-Host "Using baseUrl: $baseUrl" -ForegroundColor Gray
 Write-Host "Host user   : $hostUsername" -ForegroundColor Gray
 Write-Host "Player user : $playerUsername" -ForegroundColor Gray
@@ -130,6 +139,36 @@ try {
   # 5.2 标记初始化完成
   $completeResp = Invoke-Api -Method POST -Path "/api/rooms/$roomId/host-config/complete" -Token $hostToken -Body @{}
   Assert-Condition ($completeResp.code -eq 200 -and $completeResp.data.initializationCompleted) "主持人初始化配置标记完成"
+  Write-Host ""
+
+  # 5.3 更新 API 配置，注入有效的 DeepSeek API Key 和 stream:false
+  Write-Host "Step 5.5: Update API config with DeepSeek key" -ForegroundColor Cyan
+  $updateApiResp = Invoke-Api -Method POST -Path "/api/rooms/$roomId/host-config/api" -Token $hostToken -Body @{
+    apiProvider = "deepseek"
+    apiEndpoint = "https://api.deepseek.com/v1/chat/completions"
+    apiHeaders = @{
+      "Content-Type" = "application/json"
+      "Authorization" = "Bearer $deepseekApiKey"
+    }
+    apiBodyTemplate = @{
+      model = "deepseek-chat"
+      stream = $false
+      messages = @(
+        @{
+          role = "system"
+          content = "你是一个游戏推演引擎，根据玩家的决策和游戏规则，生成游戏剧情和结果。"
+        },
+        @{
+          role = "user"
+          content = "{{prompt}}"
+        }
+      )
+      max_tokens = 2000
+      temperature = 0.7
+    }
+  }
+  Assert-Condition ($updateApiResp.code -eq 200) "API 配置已更新（包含有效 DeepSeek Key）"
+  Assert-Condition ($updateApiResp.data.apiBodyTemplate.stream -eq $false) "确认 stream 已设置为 false"
   Write-Host ""
 
   # 6. 开始游戏，创建 GameSession

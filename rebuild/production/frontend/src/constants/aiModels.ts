@@ -31,7 +31,7 @@ export const PRESET_MODELS: AIModelConfig[] = [
       ],
       temperature: 0.7,
       max_tokens: 2000,
-      stream: true
+      stream: false
     },
     description: 'DeepSeek Chat - Default recommended model'
   },
@@ -54,7 +54,7 @@ export const PRESET_MODELS: AIModelConfig[] = [
       ],
       temperature: 0.7,
       max_tokens: 2000,
-      stream: true
+      stream: false
     },
     description: 'DeepSeek Reasoner - Enhanced reasoning capability'
   },

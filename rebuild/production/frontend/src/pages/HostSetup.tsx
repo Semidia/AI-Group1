@@ -194,7 +194,7 @@ function HostSetup() {
         apiHeaders = safeParseJson(values.apiHeaders);
       }
 
-      // Auto-fill body template if provider is deepseek and template is empty
+      // Auto-fill body template for DeepSeek when empty.
       let apiBodyTemplate = safeParseJson(values.apiBodyTemplate);
       if (values.apiProvider === 'deepseek' && !apiBodyTemplate) {
         apiBodyTemplate = {
@@ -211,11 +211,8 @@ function HostSetup() {
           ],
           temperature: 0.7,
           max_tokens: 2000,
-          stream: true
+          stream: false
         };
-      } else if (values.apiProvider === 'deepseek' && apiBodyTemplate && typeof apiBodyTemplate === 'object') {
-        // Ensure stream is enabled for deepseek
-        apiBodyTemplate = { ...apiBodyTemplate, stream: true };
       }
 
       const payload = {
@@ -226,6 +223,13 @@ function HostSetup() {
       };
       const data = await hostConfigAPI.updateApi(roomId, payload);
       setConfig(data);
+
+      // 同步表单里的 JSON 文本，方便你在 "当前配置快照" 和编辑区看到同一个值
+      if ((data as any)?.apiBodyTemplate) {
+        formApi.setFieldsValue({
+          apiBodyTemplate: JSON.stringify((data as any).apiBodyTemplate, null, 2),
+        });
+      }
       message.success('API 配置已保存');
     } catch (error) {
       message.error((error as Error).message || '保存 API 配置失败');
