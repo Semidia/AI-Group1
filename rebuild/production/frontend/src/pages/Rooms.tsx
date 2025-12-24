@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Form, Input, InputNumber, Tag, message, Empty } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, TeamOutlined, EyeOutlined } from '@ant-design/icons';
 import { roomAPI, RoomSummary } from '../services/rooms';
 import { wsService } from '../services/websocket';
 import { useAuthStore } from '../stores/authStore';
@@ -10,6 +10,8 @@ import { useSocket } from '../hooks/useSocket';
 import { useMessageRouter } from '../hooks/useMessageRouter';
 import { gameAPI } from '../services/game';
 import { HelpButton } from '../components/HelpButton';
+import UserRegistryPanel from '../components/UserRegistryPanel';
+import OnlineRoomsPanel from '../components/OnlineRoomsPanel';
 
 function Rooms() {
   const { token, user } = useAuthStore();
@@ -18,6 +20,8 @@ function Rooms() {
   const [loading, setLoading] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
   const [actionRoomId, setActionRoomId] = useState<string | null>(null);
+  const [userPanelOpen, setUserPanelOpen] = useState(false);
+  const [roomsPanelOpen, setRoomsPanelOpen] = useState(false);
   const [form] = Form.useForm();
   const socketStatus = useSocket();
   useMessageRouter();
@@ -259,18 +263,35 @@ function Rooms() {
       <div className="grid-lines" />
       <div className="rooms-content">
         <div className="rooms-header" style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <Button
               type="text"
               icon={<ArrowLeftOutlined />}
               onClick={() => navigate('/')}
-              style={{ marginRight: 16 }}
             >
               返回
             </Button>
             <h1 className="rooms-title" style={{ margin: 0 }}>游戏房间</h1>
           </div>
-          <HelpButton />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <HelpButton />
+            <Button
+              size="small"
+              icon={<TeamOutlined />}
+              onClick={() => setUserPanelOpen(true)}
+              style={{ fontSize: 12 }}
+            >
+              在册用户
+            </Button>
+            <Button
+              size="small"
+              icon={<EyeOutlined />}
+              onClick={() => setRoomsPanelOpen(true)}
+              style={{ fontSize: 12 }}
+            >
+              在线房间
+            </Button>
+          </div>
         </div>
         <div className="card-plate">
           <div className="rooms-header" style={{ marginBottom: 16 }}>
@@ -337,6 +358,9 @@ function Rooms() {
           )}
         </div>
       </div>
+
+      <UserRegistryPanel open={userPanelOpen} onClose={() => setUserPanelOpen(false)} />
+      <OnlineRoomsPanel open={roomsPanelOpen} onClose={() => setRoomsPanelOpen(false)} />
     </div>
   );
 }
