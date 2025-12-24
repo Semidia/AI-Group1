@@ -18,6 +18,7 @@ import GameSave from './pages/GameSave';
 import Tasks from './pages/Tasks';
 import StrategyAnalysis from './pages/StrategyAnalysis';
 import DecisionConsole from './pages/DecisionConsole';
+import ServerConfig from './pages/ServerConfig';
 import ProtectedRoute from './components/ProtectedRoute';
 import { useClickExplosion } from './hooks/useClickExplosion';
 import './App.css';
@@ -58,6 +59,7 @@ const router = createBrowserRouter(
         { path: 'login', element: <Login /> },
         { path: 'register', element: <Register /> },
         { path: 'test-websocket', element: <TestWebSocket /> },
+        { path: 'server-config', element: <ProtectedRoute><ServerConfig /></ProtectedRoute> },
       ],
     },
   ],

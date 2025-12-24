@@ -10,11 +10,13 @@ import {
   LockOutlined,
   UserOutlined,
   EyeOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import UserRegistryPanel from '../components/UserRegistryPanel';
 import OnlineRoomsPanel from '../components/OnlineRoomsPanel';
+import ConnectionStatus from '../components/ConnectionStatus';
 import { useAuthStore } from '../stores/authStore';
 
 const { Title, Paragraph, Text } = Typography;
@@ -36,6 +38,12 @@ function Home() {
           <div className="top-actions">
             {user ? (
               <>
+                <Link to="/server-config">
+                  <Button size="small" icon={<SettingOutlined />} style={{ height: 'auto', padding: '8px 12px', marginRight: '8px' }}>
+                    服务器配置
+                  </Button>
+                </Link>
+                <ConnectionStatus />
                 <span className="user-pill">
                   <UserOutlined />
                   <span>{user.nickname || user.username}</span>
