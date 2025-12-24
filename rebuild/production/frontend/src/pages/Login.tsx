@@ -8,10 +8,11 @@ import { useAuthStore } from '../stores/authStore';
 const { Title, Paragraph, Text } = Typography;
 
 function Login() {
-  const { user, login, logout } = useAuthStore();
+  const { user, login } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
   const [loading, setLoading] = useState(false);
+  const [buttonHovered, setButtonHovered] = useState(false);
 
   const onFinish = async (values: { username: string; password: string }) => {
     setLoading(true);
@@ -35,7 +36,12 @@ function Login() {
   };
 
   return (
-    <div className="home-shell">
+    <div 
+      className="home-shell"
+      style={{
+        background: 'linear-gradient(135deg, rgba(245, 255, 245, 0.9) 0%, rgba(235, 250, 235, 0.7) 100%)',
+      }}
+    >
       <div className="grid-lines" />
       <div className="home-content">
         <header className="home-topbar">
@@ -66,7 +72,7 @@ function Login() {
         <div className="hero-left glass-surface">
           <div className="hero-pill" style={{ marginBottom: 12 }}>
             <span className="pill-dot" />
-            <Text strong>AI文字交互式多人竞争博弈游戏</Text>
+            <Text strong>凡墙皆是门·AI文字交互式多人竞争博弈游戏</Text>
           </div>
           <Title level={1} className="hero-title" style={{ marginTop: 8 }}>
             欢迎来到游戏世界！
@@ -74,18 +80,6 @@ function Login() {
           <Paragraph className="hero-desc" style={{ marginBottom: 20 }}>
             不止进入房间，开启一场策略冒险。
           </Paragraph>
-
-          <Space wrap size="middle">
-            <Link to="/rooms" className="btn-strong glow">
-              进入房间列表
-            </Link>
-            <Link to="/rooms" className="btn-ghost">
-              在册用户
-            </Link>
-            <Link to="/rooms" className="btn-ghost">
-              在线房间
-            </Link>
-          </Space>
 
           {!user && (
             <Card
@@ -121,9 +115,23 @@ function Login() {
                     block
                     icon={<LoginOutlined />}
                     loading={loading}
+                    onMouseEnter={() => setButtonHovered(true)}
+                    onMouseLeave={() => setButtonHovered(false)}
+                    style={{
+                      backgroundColor: buttonHovered ? '#A8D8A8' : '#B8E6B8',
+                      borderColor: buttonHovered ? '#A8D8A8' : '#B8E6B8',
+                      transition: 'all 0.3s ease',
+                      transform: buttonHovered ? 'translateY(-2px)' : 'translateY(0)',
+                      boxShadow: buttonHovered ? '0 8px 16px rgba(168, 216, 168, 0.4)' : '0 2px 8px rgba(184, 230, 184, 0.2)',
+                    }}
                   >
                     登录
                   </Button>
+                </Form.Item>
+                <Form.Item>
+                  <div style={{ textAlign: 'center' }}>
+                    <Link to="/register">没有账号？立即注册</Link>
+                  </div>
                 </Form.Item>
               </Form>
             </Card>
