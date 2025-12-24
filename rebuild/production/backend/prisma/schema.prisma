@@ -1,0 +1,300 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  password  String
+  nickname  String?
+  avatarUrl String?
+  level     Int      @default(1)
+  experience Int     @default(0)
+  status    String   @default("active") // active, frozen
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lastLoginAt DateTime?
+
+  // Relations
+  createdRooms Room[] @relation("Room_Creator")
+  hostedRooms  Room[] @relation("Room_Host")
+  roomPlayers   RoomPlayer[] @relation("RoomPlayer_User")
+  playerActions PlayerAction[] @relation("PlayerAction_User")
+  hostConfigs   HostConfig[]   @relation("HostConfig_User")
+  temporaryEvents TemporaryEvent[] @relation("TemporaryEvent_User")
+  initiatedTrades Trade[] @relation("TradeInitiator")
+  receivedTrades Trade[] @relation("TradeTarget")
+  gameSaves       GameSave[]     @relation("GameSave_User")
+  createdTasks    Task[]       @relation("Task_Creator")
+  taskProgresses  TaskProgress[] @relation("TaskProgress_User")
+  strategies      Strategy[]    @relation("Strategy_User")
+
+  @@map("users")
+}
+
+model Room {
+  id            String   @id @default(uuid())
+  name          String
+  creatorId     String
+  hostId        String
+  maxPlayers    Int
+  currentPlayers Int     @default(0)
+  status        String   @default("waiting") // waiting, configuring, playing, finished
+  password      String?
+  createdAt     DateTime @default(now())
+  startedAt     DateTime?
+  finishedAt    DateTime?
+
+  // Relations
+  creator      User     @relation("Room_Creator", fields: [creatorId], references: [id])
+  host         User     @relation("Room_Host", fields: [hostId], references: [id])
+  players      RoomPlayer[]
+  hostConfig   HostConfig?
+  gameSession  GameSession?
+
+  @@map("game_rooms")
+}
+
+model RoomPlayer {
+  id         String   @id @default(uuid())
+  roomId     String
+  userId     String
+  role       String   // host, human_player
+  playerIndex Int?
+  isHuman    Boolean  @default(true)
+  status     String   @default("joined") // joined, ready, playing, left
+  joinedAt   DateTime @default(now())
+  leftAt     DateTime?
+
+  // Relations
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User @relation("RoomPlayer_User", fields: [userId], references: [id])
+
+  @@map("room_players")
+}
+
+model HostConfig {
+  id                    String   @id @default(uuid())
+  roomId                String   @unique
+  createdBy             String
+  apiConfig             Json
+  apiProvider           String?
+  apiEndpoint           String?
+  apiHeaders            Json?
+  apiBodyTemplate       Json?
+  validationStatus      String   @default("pending")
+  validationMessage     String?
+  validatedAt           DateTime?
+  configurationCompletedAt DateTime?
+  gameRules             String?
+  totalDecisionEntities Int
+  humanPlayerCount      Int
+  aiPlayerCount         Int
+  decisionTimeLimit     Int      @default(4)
+  timeoutStrategy       String   @default("auto_submit")
+  initializationCompleted Boolean @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  // Relations
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  creator User @relation("HostConfig_User", fields: [createdBy], references: [id])
+
+  @@map("host_configurations")
+}
+
+model GameSession {
+  id              String   @id @default(uuid())
+  roomId          String   @unique
+  currentRound    Int      @default(1)
+  totalRounds     Int?
+  roundStatus     String   @default("decision") // decision, review, inference, result
+  decisionDeadline DateTime?
+  gameState       Json?
+  status          String   @default("playing") // playing, paused, finished
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  room    Room          @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  actions PlayerAction[]
+  events  TemporaryEvent[]
+  trades  Trade[]
+  saves   GameSave[]
+  tasks   Task[]
+
+  @@map("game_sessions")
+}
+
+model PlayerAction {
+  id          String   @id @default(uuid())
+  sessionId   String
+  userId      String
+  playerIndex Int
+  round       Int
+  selectedOptionIds Json?
+  actionText  String
+  actionType  String?
+  actionData  Json?
+  combinationSuggestion String?
+  hostModified Boolean  @default(false)
+  hostModification Json?
+  status      String   @default("pending") // pending, submitted, reviewed, inferred
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  aiResponse  Json?
+  result      Json?
+  submittedAt DateTime @default(now())
+
+  // Relations
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User        @relation("PlayerAction_User", fields: [userId], references: [id])
+
+  @@map("player_actions")
+}
+
+model TemporaryEvent {
+  id              String   @id @default(uuid())
+  sessionId       String
+  round           Int
+  eventType       String   // single_round, multi_round
+  eventContent    String
+  effectiveRounds Int
+  progress        Json
+  createdBy       String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  completedAt     DateTime?
+
+  // Relations
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  creator User         @relation("TemporaryEvent_User", fields: [createdBy], references: [id])
+
+  @@map("temporary_events")
+}
+
+model Trade {
+  id            String   @id @default(uuid())
+  sessionId     String
+  round         Int
+  initiatorId   String
+  targetId      String
+  resources     Json     // { offer: {...}, request: {...} }
+  status        String   @default("pending") // pending, accepted, rejected, expired, cancelled
+  expiresAt     DateTime
+  respondedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  session   GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  initiator User        @relation("TradeInitiator", fields: [initiatorId], references: [id])
+  target    User        @relation("TradeTarget", fields: [targetId], references: [id])
+
+  @@index([sessionId, round])
+  @@index([status])
+  @@index([expiresAt])
+  @@map("trades")
+}
+
+model GameSave {
+  id          String   @id @default(uuid())
+  sessionId   String
+  saveName    String?
+  description String?
+  isAutoSave  Boolean  @default(false)
+  saveData    Json     // 完整的游戏状态快照
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  // Relations
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  creator User        @relation("GameSave_User", fields: [createdBy], references: [id])
+
+  @@index([sessionId])
+  @@index([createdAt])
+  @@map("game_saves")
+}
+
+model Task {
+  id          String   @id @default(uuid())
+  sessionId   String
+  title       String
+  description String?
+  taskType    String   // daily, achievement, challenge, event
+  difficulty  String   @default("normal") // easy, normal, hard, expert
+  requirements Json    // 任务要求条件
+  rewards     Json?    // 奖励配置
+  status      String   @default("active") // active, completed, expired, cancelled
+  progress    Json     @default("{}") // 进度数据
+  createdBy   String?  // 主持人创建的任务
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  expiresAt   DateTime?
+  completedAt DateTime?
+
+  // Relations
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  creator User?       @relation("Task_Creator", fields: [createdBy], references: [id])
+  progresses TaskProgress[]
+
+  @@index([sessionId])
+  @@index([status])
+  @@index([taskType])
+  @@index([expiresAt])
+  @@map("game_tasks")
+}
+
+model TaskProgress {
+  id          String   @id @default(uuid())
+  taskId      String
+  userId      String
+  progress    Json     @default("{}")
+  status      String   @default("in_progress") // in_progress, completed, failed
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation("TaskProgress_User", fields: [userId], references: [id])
+
+  @@unique([taskId, userId])
+  @@index([taskId])
+  @@index([userId])
+  @@index([status])
+  @@map("task_progress")
+}
+
+model Strategy {
+  id          String   @id @default(uuid())
+  userId      String
+  sessionId   String?
+  strategyName String
+  description String?
+  strategyData Json    // 策略数据（决策模式、资源分配等）
+  effectiveness Json?  // 效果评估数据
+  winRate     Float?   // 胜率
+  averageScore Float?  // 平均得分
+  totalGames  Int      @default(0)
+  totalWins   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user User @relation("Strategy_User", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([sessionId])
+  @@index([winRate])
+  @@map("user_strategies")
+}
+
