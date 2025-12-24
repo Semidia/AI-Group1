@@ -4,7 +4,28 @@
  */
 
 import axios, { AxiosRequestConfig } from 'axios';
+import https from 'https';
+import http from 'http';
 import { logger } from '../utils/logger';
+
+// 创建自定义 HTTPS Agent，增加连接稳定性
+const httpsAgent = new https.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 30000,
+  timeout: 120000,
+  maxSockets: 10,
+  maxFreeSockets: 5,
+  // 允许自签名证书（如果需要）
+  rejectUnauthorized: true,
+});
+
+const httpAgent = new http.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 30000,
+  timeout: 120000,
+  maxSockets: 10,
+  maxFreeSockets: 5,
+});
 
 export interface AIConfig {
   provider?: string | null;
@@ -62,8 +83,8 @@ export interface InferenceResult {
 
 export class AIService {
   private static instance: AIService;
-  private defaultRetries = 3;
-  private defaultTimeout = 60000; // 60秒超时
+  private defaultRetries = 5;  // 增加重试次数
+  private defaultTimeout = 120000; // 120秒超时（增加到2分钟）
 
   private constructor() { }
 
@@ -361,10 +382,18 @@ export class AIService {
       url: config.endpoint,
       headers: {
         'Content-Type': 'application/json',
+        'Connection': 'keep-alive',
         ...((config.headers as Record<string, string>) || {}),
       },
       data: requestBody,
       timeout: this.defaultTimeout,
+      // 使用自定义 Agent 增加连接稳定性
+      httpAgent: httpAgent,
+      httpsAgent: httpsAgent,
+      // 设置最大重定向次数
+      maxRedirects: 5,
+      // 验证状态码
+      validateStatus: (status) => status >= 200 && status < 300,
     };
 
     // 记录请求配置（不记录敏感信息）
@@ -451,6 +480,12 @@ export class AIService {
           errorMessage = '无法连接到API服务器，请检查endpoint地址和网络连接';
         } else if (error.code === 'ETIMEDOUT') {
           errorMessage = '连接超时，请检查网络或增加超时时间';
+        } else if (error.code === 'ECONNRESET') {
+          errorMessage = '网络连接被重置，可能是网络不稳定或代理问题，正在重试...';
+        } else if (error.code === 'EPIPE' || error.code === 'EPROTO') {
+          errorMessage = 'TLS/SSL连接异常，可能是网络环境问题';
+        } else if (error.message?.includes('socket') || error.message?.includes('TLS')) {
+          errorMessage = '网络socket连接异常，可能是网络不稳定';
         }
 
         logger.warn(`AI API call failed (attempt ${attempt}/${retries}): ${errorMessage}`, {
@@ -462,8 +497,16 @@ export class AIService {
         });
 
         if (attempt < retries) {
-          // 指数退避重试
-          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
+          // 对于网络连接错误，使用更长的退避时间
+          const isNetworkError = ['ECONNRESET', 'EPIPE', 'EPROTO', 'ETIMEDOUT', 'ECONNREFUSED'].includes(error.code) 
+            || error.message?.includes('socket') 
+            || error.message?.includes('TLS');
+          
+          // 网络错误使用更长的基础延迟
+          const baseDelay = isNetworkError ? 3000 : 1000;
+          const delay = Math.min(baseDelay * Math.pow(2, attempt - 1), 30000);
+          
+          logger.info(`Waiting ${delay}ms before retry (network error: ${isNetworkError})`);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
       }

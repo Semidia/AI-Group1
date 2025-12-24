@@ -25,6 +25,12 @@ function Home() {
           <div className="top-actions">
             {user ? (
               <>
+                <Link to="/server-config">
+                  <Button size="small" icon={<SettingOutlined />} style={{ height: 'auto', padding: '8px 12px', marginRight: '8px' }}>
+                    服务器配置
+                  </Button>
+                </Link>
+                <ConnectionStatus />
                 <span className="user-pill">
                   <UserOutlined />
                   <span>{user.nickname || user.username}</span>
