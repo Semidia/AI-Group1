@@ -57,9 +57,6 @@ function GameSessionPage() {
   }>>([]);
 
   const [turnResult, setTurnResult] = useState<TurnResultDTO | null>(null);
-  // 游戏规则（蓝本）- 保留用于将来可能的UI显示
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [gameRules, setGameRules] = useState<string | null>(null);
   const [gameState, setGameState] = useState<any>(null); // 完整的游戏状态（包含 players、currentHexagram 等）
 
   const isTimeout = useMemo(() => {
@@ -107,7 +104,6 @@ function GameSessionPage() {
       try {
         const data = await gameAPI.getSession(sessionId);
         setSession(data);
-        setGameRules(data.gameRules || null); // 读取游戏规则（蓝本）
 
         // 如果是主持人，跳转到游戏状态页面
         if (data.hostId && user?.id && data.hostId === user.id) {
