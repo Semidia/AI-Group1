@@ -13,6 +13,10 @@ function ProtectedRoute({ children }: ProtectedRouteProps) {
   const token = getStoredToken();
   const hasValidToken = !!token && !isTokenExpired(token);
 
+  if (import.meta.env.VITE_FRONTEND_SHOWCASE === 'true') {
+    return <>{children}</>;
+  }
+
   if (!isAuthenticated || !hasValidToken) {
     // Redirect to login page with return url
     return <Navigate to="/login" state={{ from: location }} replace />;

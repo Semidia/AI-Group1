@@ -3,6 +3,7 @@ import { serverConfigService } from './serverConfig';
 import { clearAuthSession, getStoredToken, isTokenExpired } from '../utils/authSession';
 
 const getApiBaseUrl = () => serverConfigService.getApiBaseUrl();
+const isFrontendShowcase = import.meta.env.VITE_FRONTEND_SHOWCASE === 'true';
 
 const apiClient = axios.create({
   baseURL: getApiBaseUrl(),
@@ -18,6 +19,11 @@ serverConfigService.subscribe(config => {
 
 apiClient.interceptors.request.use(
   config => {
+    if (isFrontendShowcase) {
+      config.baseURL = getApiBaseUrl();
+      return config;
+    }
+
     const token = getStoredToken();
     if (token) {
       if (isTokenExpired(token)) {
@@ -39,7 +45,7 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   response => response.data,
   error => {
-    if (error.response?.status === 401) {
+    if (!isFrontendShowcase && error.response?.status === 401) {
       clearAuthSession();
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
